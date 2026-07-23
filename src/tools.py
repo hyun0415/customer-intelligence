@@ -1,0 +1,153 @@
+from typing import Optional
+
+from langchain_core.tools import tool
+
+from src.database import (
+    compare_products,
+    get_helpful_reviews,
+    get_monthly_review_trend,
+    get_negative_reviews,
+    get_product,
+    get_rating_distribution,
+    get_recent_reviews,
+    get_reviews_by_date,
+    search_products,
+)
+
+
+@tool
+def search_product_tool(keyword: str, limit: int = 5):
+    """제품명이나 브랜드명으로 제품을 검색한다."""
+    return search_products(keyword, limit)
+
+
+@tool
+def get_product_tool(parent_asin: str):
+    """
+    제품 ID로 제품 상세 정보와 리뷰 통계를 조회한다.
+
+    주요 집계 필드:
+    - rating_number: Amazon 상품 메타데이터에 표시된 전체 평점 수
+    - review_count: 현재 분석 DB에 저장된 리뷰 수
+    - negative_count: 분석 DB에서 평점 3점 이하인 리뷰 수
+    - verified_count: 분석 DB에서 구매 인증된 리뷰 수
+    """
+    product = get_product(parent_asin)
+
+    if product is None:
+        return {}
+
+    return product
+
+@tool
+def get_recent_reviews_tool(parent_asin: str, limit: int = 10):
+    """특정 제품의 최신 리뷰를 조회한다."""
+    return get_recent_reviews(parent_asin, limit)
+
+
+@tool
+def get_negative_reviews_tool(parent_asin: str, limit: int = 10):
+    """특정 제품의 평점 3점 이하 부정·중립 리뷰를 최신순으로 조회한다."""
+    return get_negative_reviews(parent_asin, limit)
+
+
+@tool
+def get_helpful_reviews_tool(
+    parent_asin: str,
+    limit: int = 10,
+    rating_max: Optional[float] = None,
+    min_helpful_votes: int = 1,
+):
+    """특정 제품에서 공감 투표가 많은 리뷰를 조회한다."""
+    return get_helpful_reviews(
+        parent_asin=parent_asin,
+        limit=limit,
+        rating_max=rating_max,
+        min_helpful_votes=min_helpful_votes,
+    )
+
+
+@tool
+def get_rating_distribution_tool(parent_asin: str):
+    """특정 제품의 1~5점 평점별 리뷰 수를 조회한다."""
+    return get_rating_distribution(parent_asin)
+
+
+@tool
+def get_reviews_by_date_tool(
+    parent_asin: str,
+    start_at: str,
+    end_at: str,
+    limit: int = 20,
+    rating_max: Optional[float] = None,
+    verified_only: bool = False,
+):
+    """특정 날짜 범위의 리뷰를 조회한다. 종료일은 포함하지 않는다."""
+    return get_reviews_by_date(
+        parent_asin=parent_asin,
+        start_at=start_at,
+        end_at=end_at,
+        rating_max=rating_max,
+        verified_only=verified_only,
+        limit=limit,
+    )
+
+
+@tool
+def get_monthly_review_trend_tool(
+    parent_asin: str,
+    start_at: Optional[str] = None,
+    end_at: Optional[str] = None,
+):
+    """특정 제품의 월별 리뷰 수, 평균 평점, 부정 비율을 조회한다."""
+    return get_monthly_review_trend(
+        parent_asin=parent_asin,
+        start_at=start_at,
+        end_at=end_at,
+    )
+
+
+@tool
+def compare_products_tool(parent_asins: list[str]):
+    """여러 제품의 평점, 리뷰 수, 부정 비율 등 주요 지표를 비교한다."""
+    return compare_products(parent_asins)
+
+
+AGENT_TOOLS = [
+    search_product_tool,
+    get_product_tool,
+    get_recent_reviews_tool,
+    get_negative_reviews_tool,
+    get_helpful_reviews_tool,
+    get_rating_distribution_tool,
+    get_reviews_by_date_tool,
+    get_monthly_review_trend_tool,
+    compare_products_tool,
+]
+
+
+if __name__ == "__main__":
+    print("도구 목록")
+
+    for agent_tool in AGENT_TOOLS:
+        print(f"- {agent_tool.name}: {agent_tool.description}")
+
+    print("\n제품 검색 테스트")
+    result = search_product_tool.invoke(
+        {
+            "keyword": "Neutrogena",
+            "limit": 3,
+        }
+    )
+    print(result)
+
+    print("\n공감이 많은 부정 리뷰 테스트")
+    result = get_helpful_reviews_tool.invoke(
+        {
+            "parent_asin": "B005IHT8KI",
+            "rating_max": 3,
+            "min_helpful_votes": 1,
+            "limit": 3,
+        }
+    )
+    print(result)

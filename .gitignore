@@ -1,0 +1,25 @@
+# 환경변수 및 비밀정보
+.env
+.env.*
+!.env.example
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# 평가 및 임시 파일
+*.log
+
+# IDE
+.vscode/
+.idea/
+
+# 운영체제
+.DS_Store
+Thumbs.db
+
+# 원본 데이터
+data/
+eval/results/
