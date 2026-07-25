@@ -249,12 +249,14 @@ def save_csv(results, output_path):
         "unexpected_tools",
         "status",
         "accuracy_score",
+        "grounding_score",
         "analysis_score",
         "actionability_score",
         "total_score",
         "review_notes",
         "answer",
         "tool_calls",
+        "tool_outputs",
     ]
 
     with output_path.open(
