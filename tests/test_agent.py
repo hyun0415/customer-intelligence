@@ -1,7 +1,7 @@
 import re
 import pytest
 from langchain_core.messages import AIMessage
-from agent import extract_text, run_agent
+from src.agent import extract_text, run_agent
 
 
 VALID_ASIN = "B005IHT8KI"
