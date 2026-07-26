@@ -37,6 +37,7 @@ EVAL_CASES = [
             "3점 이하 부정 리뷰 비율을 분석해줘."
         ),
         "expected_tools": ["get_rating_distribution_tool"],
+        "optional_tools": ["get_product_tool"],
         "forbidden_tools": ["search_product_tool"],
         "evaluation_focus": "평점 분포와 부정 비율의 근거 있는 해석",
     },
@@ -128,6 +129,10 @@ EVAL_CASES = [
             "get_negative_reviews_tool",
             "get_helpful_reviews_tool",
         ],
+        "optional_tools": [
+            "get_product_tool",
+            "get_rating_distribution_tool",
+        ],
         "forbidden_tools": ["search_product_tool"],
         "evaluation_focus": "불만 근거와 개선안 사이의 논리적 연결",
     },
@@ -141,6 +146,11 @@ EVAL_CASES = [
         "expected_tools": [
             "get_product_tool",
             "get_helpful_reviews_tool",
+        ],
+        "optional_tools": [
+            "get_negative_reviews_tool",
+            "get_rating_distribution_tool",
+            "get_recent_reviews_tool",
         ],
         "forbidden_tools": ["search_product_tool"],
         "evaluation_focus": "리뷰 근거 기반 메시지와 위험 요소 구분",

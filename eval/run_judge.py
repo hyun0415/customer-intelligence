@@ -6,6 +6,18 @@ from typing import Any
 
 from eval.evaluator.judge import LLMJudge
 from eval.evaluator.runner import evaluate_cases
+from eval.reports.summary import build_summary, save_summary
+
+from eval.reports.dashboard import (
+    build_dashboard,
+    save_dashboard,
+)
+
+from eval.reports.tool_metrics import (
+    build_tool_metrics,
+    save_tool_metrics_csv,
+    save_tool_metrics_json,
+)
 
 
 DEFAULT_RESULTS_DIR = Path("eval/results")
@@ -13,9 +25,7 @@ DEFAULT_RESULTS_DIR = Path("eval/results")
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description=(
-            "Agent 평가 결과 JSON을 LLM Judge로 자동 채점합니다."
-        )
+        description=("Agent 평가 결과 JSON을 LLM Judge로 자동 채점합니다.")
     )
 
     parser.add_argument(
@@ -23,8 +33,7 @@ def parse_args() -> argparse.Namespace:
         nargs="?",
         type=Path,
         help=(
-            "채점할 evaluation JSON 파일 경로. "
-            "생략하면 가장 최근 파일을 사용합니다."
+            "채점할 evaluation JSON 파일 경로. 생략하면 가장 최근 파일을 사용합니다."
         ),
     )
 
@@ -32,10 +41,7 @@ def parse_args() -> argparse.Namespace:
         "--model",
         type=str,
         default=None,
-        help=(
-            "평가에 사용할 모델. 생략하면 "
-            "EVALUATOR_MODEL 환경변수를 사용합니다."
-        ),
+        help=("평가에 사용할 모델. 생략하면 EVALUATOR_MODEL 환경변수를 사용합니다."),
     )
 
     parser.add_argument(
@@ -57,9 +63,7 @@ def find_latest_evaluation(
     ]
 
     if not candidates:
-        raise FileNotFoundError(
-            f"평가 JSON을 찾을 수 없습니다: {results_dir}"
-        )
+        raise FileNotFoundError(f"평가 JSON을 찾을 수 없습니다: {results_dir}")
 
     return max(
         candidates,
@@ -72,9 +76,7 @@ def load_json(path: Path) -> list[dict]:
         data = json.load(file)
 
     if not isinstance(data, list):
-        raise ValueError(
-            "평가 JSON의 최상위 구조는 리스트여야 합니다."
-        )
+        raise ValueError("평가 JSON의 최상위 구조는 리스트여야 합니다.")
 
     return data
 
@@ -128,34 +130,25 @@ def collect_fieldnames(
         "analysis_score",
         "actionability_score",
         "total_score",
+        "strengths",
+        "problems",
+        "evidence",
+        "suggestions",
         "review_notes",
-
+        "review_notes",
         # 새로 추가
         "rule_check",
         "raw_judge_scores",
         "score_adjustments",
-
         "answer",
         "tool_calls",
         "tool_outputs",
         "judge_error",
     ]
-    
-    discovered_fields = {
-        key
-        for result in results
-        for key in result
-    }
 
-    ordered_fields = [
-        field
-        for field in preferred_fields
-        if field in discovered_fields
-    ]
-
-    remaining_fields = sorted(
-        discovered_fields - set(ordered_fields)
-    )
+    discovered_fields = {key for result in results for key in result}
+    ordered_fields = [field for field in preferred_fields if field in discovered_fields]
+    remaining_fields = sorted(discovered_fields - set(ordered_fields))
 
     return ordered_fields + remaining_fields
 
@@ -180,9 +173,7 @@ def save_csv(
 
         for result in results:
             row = {
-                field: serialize_csv_value(
-                    result.get(field, "")
-                )
+                field: serialize_csv_value(result.get(field, ""))
                 for field in fieldnames
             }
             writer.writerow(row)
@@ -193,12 +184,25 @@ def create_output_paths(
 ) -> tuple[Path, Path]:
     base_name = input_path.stem
 
-    json_path = input_path.with_name(
-        f"judged_{base_name}.json"
-    )
-    csv_path = input_path.with_name(
-        f"judged_{base_name}.csv"
-    )
+    json_path = input_path.with_name(f"judged_{base_name}.json")
+    csv_path = input_path.with_name(f"judged_{base_name}.csv")
+
+    return json_path, csv_path
+
+
+def create_summary_path(
+    input_path: Path,
+) -> Path:
+    return input_path.with_name(f"summary_{input_path.stem}.json")
+
+
+def create_tool_metrics_paths(
+    input_path: Path,
+) -> tuple[Path, Path]:
+    base_name = input_path.stem
+
+    json_path = input_path.with_name(f"tool_metrics_{base_name}.json")
+    csv_path = input_path.with_name(f"tool_metrics_{base_name}.csv")
 
     return json_path, csv_path
 
@@ -212,26 +216,15 @@ def print_progress(
     judge_status = result.get("judge_status", "unknown")
     total_score = result.get("total_score", "-")
 
-    print(
-        f"[{index}/{total}] "
-        f"{case_id} | "
-        f"{judge_status} | "
-        f"score={total_score}"
-    )
+    print(f"[{index}/{total}] {case_id} | {judge_status} | score={total_score}")
 
 
 def print_summary(results: list[dict]) -> None:
     completed = [
-        result
-        for result in results
-        if result.get("judge_status") == "completed"
+        result for result in results if result.get("judge_status") == "completed"
     ]
 
-    errors = [
-        result
-        for result in results
-        if result.get("judge_status") == "error"
-    ]
+    errors = [result for result in results if result.get("judge_status") == "error"]
 
     print()
     print("LLM Judge 평가 완료")
@@ -263,16 +256,10 @@ def print_summary(results: list[dict]) -> None:
 def main() -> None:
     args = parse_args()
 
-    input_path = (
-        args.input_path
-        if args.input_path
-        else find_latest_evaluation()
-    )
+    input_path = args.input_path if args.input_path else find_latest_evaluation()
 
     if not input_path.exists():
-        raise FileNotFoundError(
-            f"입력 파일을 찾을 수 없습니다: {input_path}"
-        )
+        raise FileNotFoundError(f"입력 파일을 찾을 수 없습니다: {input_path}")
 
     print(f"입력 파일: {input_path}")
 
@@ -287,13 +274,48 @@ def main() -> None:
     )
 
     json_path, csv_path = create_output_paths(input_path)
+    summary_path = create_summary_path(input_path)
 
     save_json(results, json_path)
     save_csv(results, csv_path)
+
+    summary = build_summary(results)
+    save_summary(summary, summary_path)
+
+    tool_metrics = build_tool_metrics(results)
+    dashboard_path = input_path.with_name(f"error_dashboard_{input_path.stem}.md")
+    tool_metrics_json_path, tool_metrics_csv_path = create_tool_metrics_paths(
+        input_path
+    )
+
+    save_tool_metrics_json(
+        metrics=tool_metrics,
+        output_path=tool_metrics_json_path,
+    )
+
+    save_tool_metrics_csv(
+        per_tool_metrics=tool_metrics["per_tool_metrics"],
+        output_path=tool_metrics_csv_path,
+    )
+
+    dashboard = build_dashboard(
+        results=results,
+        tool_metrics=tool_metrics,
+    )
+
+    save_dashboard(
+        dashboard,
+        dashboard_path,
+    )
+
     print_summary(results)
 
     print(f"- JSON: {json_path}")
     print(f"- CSV: {csv_path}")
+    print(f"- Summary: {summary_path}")
+    print(f"- Dashboard: {dashboard_path}")
+    print(f"- Tool Metrics JSON: {tool_metrics_json_path}")
+    print(f"- Tool Metrics CSV: {tool_metrics_csv_path}")
 
 
 if __name__ == "__main__":

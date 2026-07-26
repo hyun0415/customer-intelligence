@@ -163,12 +163,17 @@ def evaluate_case(
             rule_result=rule_result,
         )
 
-        judge_scores = judge_result.model_dump()
-        review_notes = judge_scores.pop("review_notes")
+        judge_output = judge_result.model_dump()
+
+        review_notes = judge_output.pop("review_notes")
+        strengths = judge_output.pop("strengths")
+        problems = judge_output.pop("problems")
+        evidence = judge_output.pop("evidence")
+        suggestions = judge_output.pop("suggestions")
 
         # 3단계: 규칙 기반 최종 보정
         final_scores, adjustments = apply_rule_caps(
-            scores=judge_scores,
+            scores=judge_output,
             rule_result=rule_result,
         )
 
@@ -184,7 +189,12 @@ def evaluate_case(
             rule_result.model_dump()
         )
         evaluated_case["score_adjustments"] = adjustments
-        evaluated_case["raw_judge_scores"] = judge_scores
+        evaluated_case["raw_judge_scores"] = judge_output
+        evaluated_case["strengths"] = strengths
+        evaluated_case["problems"] = problems
+        evaluated_case["evidence"] = evidence
+        evaluated_case["suggestions"] = suggestions
+        evaluated_case["review_notes"] = review_notes
 
         evaluated_case["judge_status"] = "completed"
         evaluated_case["judge_error"] = ""

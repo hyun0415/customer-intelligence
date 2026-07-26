@@ -2,6 +2,8 @@ import json
 import math
 import re
 from typing import Any
+import ast
+import itertools
 from dataclasses import dataclass
 from eval.evaluator.schemas import NumericCheckResult
 
@@ -17,6 +19,39 @@ NUMBER_PATTERN = re.compile(
     r"-?\d[\d,]*(?:\.\d+)?%?"
 )
 
+DECIMAL_PATTERN = re.compile(
+    r"Decimal\(['\"](-?\d+(?:\.\d+)?)['\"]\)"
+)
+
+def parse_structured_string(value: str) -> Any:
+    """
+    JSON 또는 Python repr 형태의 문자열을
+    리스트·딕셔너리로 안전하게 복원한다.
+
+    예:
+    "[{'review_count': 10}, {'review_count': 20}]"
+    """
+    stripped = value.strip()
+
+    if not stripped:
+        return value
+
+    try:
+        return json.loads(stripped)
+    except json.JSONDecodeError:
+        pass
+
+    # Decimal('24.78') → 24.78
+    normalized = DECIMAL_PATTERN.sub(
+        r"\1",
+        stripped,
+    )
+
+    try:
+        return ast.literal_eval(normalized)
+    except (ValueError, SyntaxError):
+        return value
+
 def normalize_number(value: str) -> str:
     value = value.strip().replace(",", "")
 
@@ -31,6 +66,31 @@ def normalize_number(value: str) -> str:
 
     return f"{number:.6f}".rstrip("0").rstrip(".")
 
+def normalize_structured_value(value: Any) -> Any:
+    if isinstance(value, str):
+        parsed = parse_structured_string(value)
+
+        if parsed is value:
+            return value
+
+        if parsed == value:
+            return value
+
+        return normalize_structured_value(parsed)
+
+    if isinstance(value, list):
+        return [
+            normalize_structured_value(item)
+            for item in value
+        ]
+
+    if isinstance(value, dict):
+        return {
+            key: normalize_structured_value(item)
+            for key, item in value.items()
+        }
+
+    return value
 
 def extract_numbers(value: Any) -> set[str]:
     text = json.dumps(
@@ -52,17 +112,21 @@ def extract_numbers(value: Any) -> set[str]:
 
 def extract_derived_percentages(value: Any) -> set[str]:
     """
-    Tool output에 등장하는 숫자 조합으로 만들 수 있는
-    간단한 비율을 허용한다.
+    Tool Output의 직접 숫자와 파생 숫자를 사용해
+    계산 가능한 비율을 허용한다.
 
     예:
-    1295 / 5226 * 100 = 24.78%
+    - 5161 / 5226 * 100 = 98.8%
+    - (637 + 3294) / 5226 * 100 = 75.2%
     """
-    raw_numbers = extract_numbers(value)
+    normalized_value = normalize_structured_value(value)
+
+    direct_numbers = extract_numbers(normalized_value)
+    derived_numbers = extract_derived_numbers(normalized_value)
 
     numeric_values = []
 
-    for item in raw_numbers:
+    for item in direct_numbers | derived_numbers:
         if item.endswith("%"):
             continue
 
@@ -74,20 +138,24 @@ def extract_derived_percentages(value: Any) -> set[str]:
         except ValueError:
             continue
 
-    percentages = set()
+    numeric_values = sorted(set(numeric_values))
 
-    # 계산량이 과도해지는 것을 방지한다.
-    numeric_values = numeric_values[:100]
+    percentages = set()
 
     for numerator in numeric_values:
         for denominator in numeric_values:
-            if numerator > denominator or denominator == 0:
+            if denominator == 0:
+                continue
+
+            if numerator > denominator:
                 continue
 
             percentage = numerator / denominator * 100
 
             if 0 <= percentage <= 100:
-                percentages.add(f"{percentage:.4f}%")
+                percentages.add(
+                    f"{percentage:.4f}%"
+                )
 
     return percentages
 
@@ -192,7 +260,27 @@ def check_numbers(case: dict) -> NumericCheckResult:
         notes=notes,
     )
 
+def format_derived_number(value: float) -> str:
+    if value.is_integer():
+        return str(int(value))
+
+    return f"{value:.6f}".rstrip("0").rstrip(".")
+
+
 def extract_derived_numbers(value: Any) -> set[str]:
+    """
+    Tool Output에서 직접 계산 가능한 숫자를 생성한다.
+
+    허용 범위:
+    - 리스트 길이
+    - 같은 필드의 전체 합계
+    - 같은 필드 값 두 개의 합계
+
+    예:
+    - 검색 결과 2개
+    - 4점 637건 + 5점 3,294건 = 3,931건
+    """
+    normalized_value = normalize_structured_value(value)
     derived = set()
 
     def walk(item: Any) -> None:
@@ -219,19 +307,26 @@ def extract_derived_numbers(value: Any) -> set[str]:
                 if len(values) < 2:
                     continue
 
+                # 같은 필드 전체 합계
                 total = sum(values)
+                derived.add(
+                    format_derived_number(total)
+                )
 
-                if total.is_integer():
-                    derived.add(str(int(total)))
-                else:
+                # 같은 필드의 두 값 합계
+                for left, right in itertools.combinations(
+                    values,
+                    2,
+                ):
+                    pair_sum = left + right
                     derived.add(
-                        f"{total:.6f}".rstrip("0").rstrip(".")
+                        format_derived_number(pair_sum)
                     )
 
         elif isinstance(item, dict):
             for field_value in item.values():
                 walk(field_value)
 
-    walk(value)
+    walk(normalized_value)
 
     return derived

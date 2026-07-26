@@ -34,4 +34,10 @@ class JudgeResult(BaseModel):
     grounding_score: int = Field(ge=1, le=5)
     analysis_score: int = Field(ge=1, le=5)
     actionability_score: int = Field(ge=1, le=5)
+
+    strengths: list[str] = Field(default_factory=list)
+    problems: list[str] = Field(default_factory=list)
+    evidence: list[str] = Field(default_factory=list)
+    suggestions: list[str] = Field(default_factory=list)
+
     review_notes: str = Field(min_length=1)
