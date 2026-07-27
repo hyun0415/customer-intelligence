@@ -14,6 +14,9 @@ from src.database import (
     search_products,
 )
 
+from src.analysis.review_patterns import (
+    build_review_patterns,
+)
 
 @tool
 def search_product_tool(keyword: str, limit: int = 5):
@@ -112,6 +115,25 @@ def compare_products_tool(parent_asins: list[str]):
     """여러 제품의 평점, 리뷰 수, 부정 비율 등 주요 지표를 비교한다."""
     return compare_products(parent_asins)
 
+@tool
+def get_review_patterns_tool(
+    parent_asin: str,
+    limit: int = 20,
+):
+    """
+    공감도가 높은 리뷰를 Aspect 기반으로 분석하여
+    반복 패턴을 반환한다.
+    """
+
+    reviews = get_helpful_reviews(
+        parent_asin=parent_asin,
+        rating_max=3,
+        min_helpful_votes=1,
+        limit=limit,
+    )
+
+    return build_review_patterns(reviews)
+
 
 AGENT_TOOLS = [
     search_product_tool,
@@ -123,6 +145,7 @@ AGENT_TOOLS = [
     get_reviews_by_date_tool,
     get_monthly_review_trend_tool,
     compare_products_tool,
+    get_review_patterns_tool,
 ]
 
 
@@ -132,22 +155,39 @@ if __name__ == "__main__":
     for agent_tool in AGENT_TOOLS:
         print(f"- {agent_tool.name}: {agent_tool.description}")
 
-    print("\n제품 검색 테스트")
-    result = search_product_tool.invoke(
-        {
-            "keyword": "Neutrogena",
-            "limit": 3,
-        }
-    )
-    print(result)
+    print("\nReview Pattern 테스트")
 
-    print("\n공감이 많은 부정 리뷰 테스트")
-    result = get_helpful_reviews_tool.invoke(
+    result = get_review_patterns_tool.invoke(
         {
             "parent_asin": "B005IHT8KI",
+            "limit": 20,
             "rating_max": 3,
             "min_helpful_votes": 1,
-            "limit": 3,
         }
     )
-    print(result)
+
+    if hasattr(result, "model_dump"):
+        result = result.model_dump()
+
+    print(f"- sample_size: {result['sample_size']}")
+    print(
+        "- classified_review_count: "
+        f"{result['classified_review_count']}"
+    )
+    print(f"- pattern_count: {len(result['patterns'])}")
+
+    print("\n상위 Pattern")
+
+    for pattern in result["patterns"][:5]:
+        print(
+            f"- {pattern['topic']}: "
+            f"count={pattern['count']}, "
+            f"ratio={pattern['ratio']}, "
+            f"confidence={pattern['average_confidence']}"
+        )
+
+        for evidence in pattern["evidence"][:2]:
+            print(
+                f"  · review[{evidence['source_index']}]: "
+                f"{evidence['evidence']}"
+            )

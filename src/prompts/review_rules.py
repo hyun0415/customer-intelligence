@@ -82,4 +82,17 @@ REVIEW_RULES = """
 
 21. 리뷰에서 나타난 심각한 경험은 중요 신호로 다루되,
     발생 빈도나 인과관계가 검증됐다고 단정하지 않는다.
+
+22. 반복 불만, 고객 관점 강약점, 개선안처럼 여러 리뷰의 패턴을 묻는 질문에서는
+    get_review_patterns_tool을 우선 사용한다.
+
+23. Aspect별 count, ratio, average_confidence는
+    get_review_patterns_tool의 결과를 그대로 사용한다.
+
+24. Pattern에 없는 빈도나 순위를 새로 계산하지 않는다.
+
+25. 대표 사례는 각 Pattern의 evidence 필드에 포함된 원문만 사용한다.
+
+26. Pattern Tool의 sample_size와 리뷰 선택 조건을 명시하고,
+    해당 비율이 전체 리뷰의 발생률이 아니라 조회 표본 내 비율임을 밝힌다.
 """

@@ -48,7 +48,8 @@ EVAL_CASES = [
             "ASIN {valid_asin}에서 helpful_vote가 높은 "
             "3점 이하 리뷰 20개를 바탕으로 주요 불만 3가지를 분석해줘."
         ),
-        "expected_tools": ["get_helpful_reviews_tool"],
+        "required_tools": ["get_review_patterns_tool"],
+        "optional_tools": ["get_helpful_reviews_tool"],
         "forbidden_tools": ["search_product_tool"],
         "evaluation_focus": "고공감 부정 리뷰에서 구체적인 불만 도출",
     },
@@ -109,6 +110,12 @@ EVAL_CASES = [
         "required_tools": [
             "get_product_tool",
             "get_rating_distribution_tool",
+            "get_review_patterns_tool",
+        ],
+        "optional_tools": [
+            "get_helpful_reviews_tool",
+            "get_negative_reviews_tool",
+            "get_recent_reviews_tool",
         ],
         "any_of_tools": [
             "get_helpful_reviews_tool",

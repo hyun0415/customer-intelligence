@@ -194,3 +194,16 @@ def test_helpful_reviews_accepts_valid_limit(valid_limit):
     )
 
     assert len(reviews) <= valid_limit
+
+def get_review_patterns_tool(
+    parent_asin: str,
+    limit: int = 20,
+    rating_max: float | None = 3,
+    min_helpful_votes: int = 1,
+):
+    result = get_review_patterns_tool.invoke(
+        {"parent_asin": "B005IHT8KI", "limit": 20,}
+    )
+
+    assert result.sample_size == 20
+    assert len(result.patterns) > 0
