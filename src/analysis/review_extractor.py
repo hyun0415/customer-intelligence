@@ -74,8 +74,12 @@ Aspect-based Structured Review Extractor다.
 def build_taxonomy_text() -> str:
     """Aspect taxonomy를 Prompt용 문자열로 변환한다."""
     return "\n".join(
-        f"- {topic}: {description}"
-        for topic, description in REVIEW_TOPICS.items()
+        (
+            f"- topic={topic}\n"
+            f"  label={metadata['label']}\n"
+            f"  definition={metadata['description']}"
+        )
+        for topic, metadata in REVIEW_TOPICS.items()
     )
 
 

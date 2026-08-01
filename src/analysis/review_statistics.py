@@ -1,17 +1,19 @@
 from collections import defaultdict
+
 from src.analysis.schemas import (
     ClassifiedReview,
+    Evidence,
     ReviewPattern,
     ReviewPatternResult,
-    Evidence,
 )
+from src.analysis.taxonomy import REVIEW_TOPICS
 
 MIN_CONFIDENCE = 0.8
 
 def aggregate_review_topics(
     classified_reviews: list[ClassifiedReview],
     min_confidence: float = MIN_CONFIDENCE,
-) -> dict:
+) -> ReviewPatternResult:
     sample_size = len(classified_reviews)
     topic_reviews: dict[str, set[int]] = defaultdict(set)
     topic_confidences: dict[str, list[float]] = defaultdict(list)
@@ -45,7 +47,7 @@ def aggregate_review_topics(
                     "source_index": review.source_index,
                     "evidence": topic.evidence,
                     "confidence": topic.confidence,
-                    "summary": review.summary,
+                    "review_summary": review.summary,
                 }
             )
 
@@ -89,9 +91,11 @@ def aggregate_review_topics(
             bool(review.topics)
             for review in classified_reviews
         ),
-        patterns=[
+       patterns=[
             ReviewPattern(
                 topic=item["topic"],
+                label=REVIEW_TOPICS[item["topic"]]["label"],
+                description=REVIEW_TOPICS[item["topic"]]["description"],
                 count=item["count"],
                 ratio=item["ratio"],
                 average_confidence=item["average_confidence"],

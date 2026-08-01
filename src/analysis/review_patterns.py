@@ -24,6 +24,11 @@ def build_review_patterns(
     Pattern JSON
     """
 
+    if not 0 <= min_confidence <= 1:
+        raise ValueError(
+            "min_confidence는 0 이상 1 이하여야 합니다."
+        )
+    
     classified_reviews = extract_reviews_topics(reviews)
 
     return aggregate_review_topics(

@@ -96,3 +96,39 @@ REVIEW_RULES = """
 26. Pattern Tool의 sample_size와 리뷰 선택 조건을 명시하고,
     해당 비율이 전체 리뷰의 발생률이 아니라 조회 표본 내 비율임을 밝힌다.
 """
+
+PATTERN_TOOL_RULES = """
+[Pattern Tool 사용 규칙]
+
+Pattern Tool의 patterns는 반복 불만을 구성하는
+공식 분류 결과다.
+
+1. 최종 답변의 불만 카테고리명은
+   각 pattern의 label 값을 그대로 사용한다.
+
+2. pattern의 label을 임의로 번역, 축약, 재명명하지 않는다.
+
+3. 서로 다른 pattern을 하나의 카테고리로 병합하지 않는다.
+
+4. 하나의 pattern을 여러 불만 카테고리로 분할하지 않는다.
+
+5. Pattern Tool에 존재하지 않는 새로운 불만 카테고리를
+   생성하지 않는다.
+
+6. pattern의 topic은 내부 식별자다.
+   최종 사용자 답변의 제목에는 label을 사용한다.
+
+7. Agent는 각 pattern 아래에서 다음 내용만 추가할 수 있다.
+   - evidence 기반 문제 설명
+   - count와 ratio 해석
+   - 고객 및 비즈니스 영향
+   - 개선 제안
+   - 표본 한계
+
+8. 추가 해석과 개선안은 새로운 불만 카테고리로
+   표현하지 않는다.
+
+9. 사용자가 N개의 주요 불만을 요청하면
+   patterns의 현재 정렬 순서를 유지한 채 앞에서 N개를 사용한다.
+   Agent는 pattern의 순위를 다시 정하지 않는다.
+"""

@@ -13,7 +13,6 @@ ReviewTopic = Literal[
     "ineffective",
     "authenticity",
     "skin_reaction",
-    "other",
 ]
 
 
@@ -33,19 +32,22 @@ class ClassifiedReview(BaseModel):
 class Evidence(BaseModel):
     source_index: int
     evidence: str
-    confidence: float
-    summary: str
+    confidence: float = Field(ge=0, le=1)
+    review_summary: str
 
 class ReviewPattern(BaseModel):
     topic: ReviewTopic
-    count: int
-    ratio: float
-    average_confidence: float
+    label: str
+    description: str
+    count: int = Field(ge=1)
+    ratio: float = Field(ge=0, le=1)
+    average_confidence: float = Field(ge=0, le=1)
     review_indexes: list[int]
     evidence: list[Evidence]
 
 
 class ReviewPatternResult(BaseModel):
     sample_size: int
-    classified_review_count: int
+    extracted_review_count: int
+    pattern_review_count: int
     patterns: list[ReviewPattern]
