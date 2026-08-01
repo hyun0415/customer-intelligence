@@ -45,9 +45,24 @@ class ReviewPattern(BaseModel):
     review_indexes: list[int]
     evidence: list[Evidence]
 
+class ReviewSelectionCriteria(BaseModel):
+    rating_max: float | None = None
+    min_helpful_votes: int | None = Field(
+        default=None,
+        ge=0,
+    )
+    sort_by: Literal[
+        "helpful_vote_desc",
+        "reviewed_at_desc",
+    ]
+    requested_limit: int = Field(ge=1)
 
 class ReviewPatternResult(BaseModel):
     sample_size: int
+    ratio_denominator: int
     extracted_review_count: int
     pattern_review_count: int
+    selection_criteria: (
+        ReviewSelectionCriteria | None
+    ) = None
     patterns: list[ReviewPattern]

@@ -95,7 +95,12 @@ EVAL_CASES = [
             "ASIN {valid_asin}의 공감도 높은 부정 리뷰를 조사해서 "
             "여러 리뷰에서 반복되는 고객 불만을 찾아줘."
         ),
-        "expected_tools": ["get_helpful_reviews_tool"],
+        "required_tools": [
+            "get_review_patterns_tool",
+        ],
+        "optional_tools": [
+            "get_helpful_reviews_tool",
+        ],
         "forbidden_tools": ["search_product_tool"],
         "evaluation_focus": "개별 리뷰를 나열하지 않고 반복 패턴 도출",
     },
@@ -131,14 +136,14 @@ EVAL_CASES = [
             "ASIN {valid_asin}의 주요 불만을 분석하고 "
             "상품 담당자가 실행할 수 있는 개선안 3가지를 제안해줘."
         ),
-        "required_tools": [],
-        "any_of_tools": [
-            "get_negative_reviews_tool",
-            "get_helpful_reviews_tool",
+        "required_tools": [
+            "get_review_patterns_tool",
         ],
         "optional_tools": [
             "get_product_tool",
             "get_rating_distribution_tool",
+            "get_helpful_reviews_tool",
+            "get_negative_reviews_tool",
         ],
         "forbidden_tools": ["search_product_tool"],
         "evaluation_focus": "불만 근거와 개선안 사이의 논리적 연결",
@@ -158,6 +163,7 @@ EVAL_CASES = [
             "get_negative_reviews_tool",
             "get_rating_distribution_tool",
             "get_recent_reviews_tool",
+            "get_review_patterns_tool",
         ],
         "forbidden_tools": ["search_product_tool"],
         "evaluation_focus": "리뷰 근거 기반 메시지와 위험 요소 구분",

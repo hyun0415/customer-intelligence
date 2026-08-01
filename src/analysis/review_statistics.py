@@ -5,22 +5,32 @@ from src.analysis.schemas import (
     Evidence,
     ReviewPattern,
     ReviewPatternResult,
+    ReviewSelectionCriteria,
 )
 from src.analysis.taxonomy import REVIEW_TOPICS
 
+
 MIN_CONFIDENCE = 0.8
+
 
 def aggregate_review_topics(
     classified_reviews: list[ClassifiedReview],
     min_confidence: float = MIN_CONFIDENCE,
+    selection_criteria: (
+        ReviewSelectionCriteria | None
+    ) = None,
 ) -> ReviewPatternResult:
     sample_size = len(classified_reviews)
+
     topic_reviews: dict[str, set[int]] = defaultdict(set)
     topic_confidences: dict[str, list[float]] = defaultdict(list)
     topic_evidence: dict[str, list[dict]] = defaultdict(list)
 
+    # 최종 Pattern에 실제 반영된 고유 리뷰
+    pattern_review_indexes: set[int] = set()
+
     for review in classified_reviews:
-        seen_topics = set()
+        seen_topics: set[str] = set()
 
         for topic in review.topics:
             if not topic.is_direct_experience:
@@ -36,6 +46,8 @@ def aggregate_review_topics(
                 continue
 
             seen_topics.add(topic.topic)
+            pattern_review_indexes.add(review.source_index)
+
             topic_reviews[topic.topic].add(
                 review.source_index
             )
@@ -51,12 +63,12 @@ def aggregate_review_topics(
                 }
             )
 
-    patterns = []
+    pattern_items = []
 
     for topic, review_indexes in topic_reviews.items():
         count = len(review_indexes)
 
-        patterns.append(
+        pattern_items.append(
             {
                 "topic": topic,
                 "count": count,
@@ -77,7 +89,7 @@ def aggregate_review_topics(
             }
         )
 
-    patterns.sort(
+    pattern_items.sort(
         key=lambda item: (
             -item["count"],
             -item["average_confidence"],
@@ -87,11 +99,14 @@ def aggregate_review_topics(
 
     return ReviewPatternResult(
         sample_size=sample_size,
-        classified_review_count=sum(
+        ratio_denominator=sample_size,
+        extracted_review_count=sum(
             bool(review.topics)
             for review in classified_reviews
         ),
-       patterns=[
+        pattern_review_count=len(pattern_review_indexes),
+        selection_criteria=selection_criteria,
+        patterns=[
             ReviewPattern(
                 topic=item["topic"],
                 label=REVIEW_TOPICS[item["topic"]]["label"],
@@ -101,10 +116,10 @@ def aggregate_review_topics(
                 average_confidence=item["average_confidence"],
                 review_indexes=item["review_indexes"],
                 evidence=[
-                    Evidence(**e)
-                    for e in item["evidence"]
+                    Evidence(**evidence)
+                    for evidence in item["evidence"]
                 ],
             )
-            for item in patterns
+            for item in pattern_items
         ],
     )

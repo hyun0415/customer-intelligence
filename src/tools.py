@@ -14,9 +14,11 @@ from src.database import (
     search_products,
 )
 
-from src.analysis.review_patterns import (
-    build_review_patterns,
-)
+from src.analysis.schemas import ReviewSelectionCriteria
+from src.analysis.review_patterns import build_review_patterns
+
+
+
 
 @tool
 def search_product_tool(keyword: str, limit: int = 5):
@@ -121,18 +123,34 @@ def get_review_patterns_tool(
     limit: int = 20,
 ):
     """
-    공감도가 높은 리뷰를 Aspect 기반으로 분석하여
-    반복 패턴을 반환한다.
+    주요 불만, 반복 불만, 불만 패턴 또는
+    불만 기반 개선 우선순위를 분석할 때 사용한다.
+
+    helpful_vote가 1 이상인 평점 3점 이하 리뷰를
+    공감 투표 내림차순으로 조회하고,
+    Aspect별 패턴과 표본 선정 기준을 반환한다.
     """
+    rating_max = 3
+    min_helpful_votes = 1
 
     reviews = get_helpful_reviews(
         parent_asin=parent_asin,
-        rating_max=3,
-        min_helpful_votes=1,
+        rating_max=rating_max,
+        min_helpful_votes=min_helpful_votes,
         limit=limit,
     )
 
-    return build_review_patterns(reviews)
+    selection_criteria = ReviewSelectionCriteria(
+        rating_max=rating_max,
+        min_helpful_votes=min_helpful_votes,
+        sort_by="helpful_vote_desc",
+        requested_limit=limit,
+    )
+
+    return build_review_patterns(
+        reviews=reviews,
+        selection_criteria=selection_criteria,
+    )
 
 
 AGENT_TOOLS = [
@@ -153,41 +171,77 @@ if __name__ == "__main__":
     print("도구 목록")
 
     for agent_tool in AGENT_TOOLS:
-        print(f"- {agent_tool.name}: {agent_tool.description}")
+        print(
+            f"- {agent_tool.name}: "
+            f"{agent_tool.description}"
+        )
 
     print("\nReview Pattern 테스트")
 
     result = get_review_patterns_tool.invoke(
         {
-            "parent_asin": "B005IHT8KI",
+            "parent_asin": "B00RWCDM4A",
             "limit": 20,
-            "rating_max": 3,
-            "min_helpful_votes": 1,
         }
     )
 
     if hasattr(result, "model_dump"):
         result = result.model_dump()
 
-    print(f"- sample_size: {result['sample_size']}")
-    print(
-        "- classified_review_count: "
-        f"{result['classified_review_count']}"
+    required_fields = {
+        "sample_size",
+        "extracted_review_count",
+        "pattern_review_count",
+        "patterns",
+    }
+
+    missing_fields = (
+        required_fields - result.keys()
     )
-    print(f"- pattern_count: {len(result['patterns'])}")
+
+    if missing_fields:
+        raise AssertionError(
+            "필수 결과 필드 누락: "
+            f"{sorted(missing_fields)}"
+        )
+
+    print(
+        f"- sample_size: "
+        f"{result['sample_size']}"
+    )
+    print(
+        f"- extracted_review_count: "
+        f"{result['extracted_review_count']}"
+    )
+    print(
+        f"- pattern_review_count: "
+        f"{result['pattern_review_count']}"
+    )
+    print(
+        f"- pattern_count: "
+        f"{len(result['patterns'])}"
+    )
 
     print("\n상위 Pattern")
 
     for pattern in result["patterns"][:5]:
+        if not pattern["evidence"]:
+            raise AssertionError(
+                f"{pattern['topic']}의 evidence가 없습니다."
+            )
+
         print(
-            f"- {pattern['topic']}: "
+            f"- {pattern['label']} "
+            f"({pattern['topic']}): "
             f"count={pattern['count']}, "
             f"ratio={pattern['ratio']}, "
-            f"confidence={pattern['average_confidence']}"
+            f"confidence="
+            f"{pattern['average_confidence']}"
         )
 
         for evidence in pattern["evidence"][:2]:
             print(
-                f"  · review[{evidence['source_index']}]: "
+                f"  · review["
+                f"{evidence['source_index']}]: "
                 f"{evidence['evidence']}"
             )

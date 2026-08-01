@@ -83,8 +83,9 @@ REVIEW_RULES = """
 21. 리뷰에서 나타난 심각한 경험은 중요 신호로 다루되,
     발생 빈도나 인과관계가 검증됐다고 단정하지 않는다.
 
-22. 반복 불만, 고객 관점 강약점, 개선안처럼 여러 리뷰의 패턴을 묻는 질문에서는
-    get_review_patterns_tool을 우선 사용한다.
+22. 반복 불만, 주요 불만, 불만 패턴, 개선 우선순위처럼
+    여러 리뷰의 반복 패턴을 묻는 질문에서는
+    get_review_patterns_tool을 반드시 사용한다.
 
 23. Aspect별 count, ratio, average_confidence는
     get_review_patterns_tool의 결과를 그대로 사용한다.
@@ -93,8 +94,10 @@ REVIEW_RULES = """
 
 25. 대표 사례는 각 Pattern의 evidence 필드에 포함된 원문만 사용한다.
 
-26. Pattern Tool의 sample_size와 리뷰 선택 조건을 명시하고,
-    해당 비율이 전체 리뷰의 발생률이 아니라 조회 표본 내 비율임을 밝힌다.
+26. Pattern Tool의 sample_size,
+    ratio_denominator와 selection_criteria를 명시한다.
+    Pattern의 ratio는 전체 리뷰 발생률이 아니라
+    ratio_denominator로 표시된 조회 표본 내 비율이다.
 """
 
 PATTERN_TOOL_RULES = """
@@ -131,4 +134,21 @@ Pattern Tool의 patterns는 반복 불만을 구성하는
 9. 사용자가 N개의 주요 불만을 요청하면
    patterns의 현재 정렬 순서를 유지한 채 앞에서 N개를 사용한다.
    Agent는 pattern의 순위를 다시 정하지 않는다.
+
+10. pattern의 ratio는
+    count / ratio_denominator로 계산된 값이다.
+
+11. ratio를 설명할 때는 반드시
+    ratio_denominator를 분모로 사용한다.
+    extracted_review_count 또는 pattern_review_count를
+    ratio의 분모로 바꾸지 않는다.
+
+12. sample_size는 Tool에 입력된 전체 리뷰 수,
+    extracted_review_count는 topic이 추출된 리뷰 수,
+    pattern_review_count는 최종 Pattern에 포함된
+    고유 리뷰 수다. 세 값을 서로 혼동하지 않는다.
+
+13. 표본의 평점, helpful_vote, 정렬 조건은
+    selection_criteria에 표시된 값만 사용한다.
+    selection_criteria에 없는 조건은 추측하지 않는다.
 """

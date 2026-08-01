@@ -7,7 +7,9 @@ from .questions import EVAL_CASES
 
 # tests/test_agent.py에서 사용하는 실제 import 경로로 수정
 from src.agent import run_agent
-
+from eval.rules.tool_checker import (
+    evaluate_required_tool_execution,
+)
 
 VALID_ASIN = "B00RWCDM4A"
 INVALID_ASIN = "ZZZZZZZZZZ"
@@ -174,14 +176,37 @@ def run_case(case):
         tool_outputs = get_tool_outputs(result)
         answer = get_final_answer(result)
 
-        tool_evaluation = evaluate_tool_usage(
+        required_tools = case.get(
+            "required_tools",
+            case.get("expected_tools", []),
+        )
+
+        tool_selection = evaluate_tool_usage(
             actual_tools=actual_tools,
-            required_tools=case.get(
-                "required_tools",
-                case.get("expected_tools", []),
+            required_tools=required_tools,
+            forbidden_tools=case.get(
+                "forbidden_tools",
+                [],
             ),
-            forbidden_tools=case.get("forbidden_tools", []),
-            any_of_tools=case.get("any_of_tools", []),
+            any_of_tools=case.get(
+                "any_of_tools",
+                [],
+            ),
+        )
+
+        tool_selection_pass = tool_selection.pop("tool_pass")
+        tool_execution = (
+            evaluate_required_tool_execution(
+                tool_outputs=tool_outputs,
+                required_tools=required_tools,
+            )
+        )
+
+        tool_execution_pass = tool_execution["tool_execution_pass"]
+
+        tool_pass = (
+            tool_selection_pass
+            and tool_execution_pass
         )
 
         return {
@@ -192,8 +217,11 @@ def run_case(case):
             "tool_calls": tool_calls,
             "tool_outputs": tool_outputs,
             "answer": answer,
-            **tool_evaluation,
-            # 아래 항목은 답변을 확인한 뒤 수동 입력
+            "tool_selection_pass": (tool_selection_pass),
+            "tool_execution_pass": (tool_execution_pass),
+            "tool_pass": tool_pass,
+            **tool_selection,
+            **tool_execution,
             "accuracy_score": "",
             "grounding_score": "",
             "analysis_score": "",
@@ -224,6 +252,14 @@ def run_case(case):
             "actionability_score": "",
             "total_score": "",
             "review_notes": str(error),
+            "tool_selection_pass": False,
+            "tool_execution_pass": False,
+            "tool_pass": False,
+            "missing_successful_tools": case.get(
+                "required_tools",
+                case.get("expected_tools", []),
+            ),
+            "failed_tool_executions": [],
         }
 
 
@@ -244,6 +280,10 @@ def save_csv(results, output_path):
         "forbidden_tools",
         "actual_tools",
         "tool_pass",
+        "tool_selection_pass",
+        "tool_execution_pass",
+        "missing_successful_tools",
+        "failed_tool_executions",
         "alternative_tool_pass",
         "missing_tools",
         "unexpected_tools",

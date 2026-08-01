@@ -76,7 +76,8 @@ def apply_rule_caps(
             2,
         )
         adjustments.append(
-            "Tool 선택 실패로 accuracy와 grounding을 "
+            "필수 Tool 선택 또는 실행 실패로 "
+            "accuracy와 grounding을 "
             "최대 2점으로 제한했습니다."
         )
 

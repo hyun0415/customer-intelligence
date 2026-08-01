@@ -1,6 +1,9 @@
 from .grounding_rules import GROUNDING_RULES
 from .output_rules import OUTPUT_RULES
-from .review_rules import REVIEW_RULES
+from .review_rules import (
+    PATTERN_TOOL_RULES,
+    REVIEW_RULES,
+)
 from .tool_rules import TOOL_RULES
 
 
@@ -25,6 +28,7 @@ SYSTEM_PROMPT = "\n\n".join(
         TOOL_RULES.strip(),
         GROUNDING_RULES.strip(),
         REVIEW_RULES.strip(),
+        PATTERN_TOOL_RULES.strip(),
         OUTPUT_RULES.strip(),
     ]
 )
