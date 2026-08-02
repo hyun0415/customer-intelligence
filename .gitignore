@@ -23,3 +23,6 @@ Thumbs.db
 # 원본 데이터
 data/
 eval/results/
+
+# RAG raw source documents
+data/rag/raw/
