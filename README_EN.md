@@ -162,3 +162,10 @@ Completed work includes:
 ## Notes
 
 This README currently focuses on the problem definition, analysis architecture, and evaluation results. Environment variable examples and the complete execution workflow will be added after the API and deployment structure are finalized.
+
+## Source Data
+
+The agent combines deterministic SQL retrieval for structured product and
+review data with hybrid RAG for unstructured external knowledge.
+
+See [ADR-001](docs/adr/001-hybrid-sql-rag-architecture.md).

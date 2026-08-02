@@ -162,3 +162,11 @@ python -m eval.run_judge <evaluation-json-path>
 ## 참고
 
 현재 README는 프로젝트의 문제 정의, 분석 구조, 평가 결과를 중심으로 작성했습니다. 환경변수 예시와 전체 실행 절차는 API 및 배포 구조가 확정된 뒤 추가할 예정입니다.
+
+
+## 데이터 처리 방식 
+
+이 에이전트는 상품·리뷰와 같은 구조화 데이터에는 결정론적인 SQL 조회를 사용하고,
+외부의 비정형 문서 지식에는 Hybrid RAG를 사용합니다.
+
+자세한 설계 근거는 [ADR-001](docs/adr/001-hybrid-sql-rag-architecture.md)을 참고하세요.
