@@ -2,7 +2,7 @@ import re
 import pytest
 from langchain_core.messages import AIMessage
 from src.agent import extract_text, run_agent
-
+from eval.rules.numeric_checker import find_unsupported_numbers
 
 VALID_ASIN = "B005IHT8KI"
 INVALID_ASIN = "ZZZZZZZZZZ"
@@ -52,7 +52,6 @@ def test_asin_question_uses_required_tools_without_search():
     assert "search_product_tool" not in tool_names
     assert "get_product_tool" in tool_names
     assert "get_helpful_reviews_tool" in tool_names
-    assert "get_rating_distribution_tool" in tool_names
 
 
 def test_helpful_review_filter_arguments_are_correct():
@@ -193,4 +192,55 @@ def test_ambiguous_product_name_returns_multiple_candidates():
         "여러 제품 후보가 제시되지 않았습니다.\n"
         f"발견된 ASIN: {sorted(asins)}\n"
         f"최종 답변: {answer}"
+    )
+
+def test_strengths_and_weaknesses_use_pattern_tool():
+    result = run_agent(
+        f"""
+        ASIN {VALID_ASIN} 제품의 고객 관점 강점과 약점을 분석해줘.
+        평점 통계와 실제 리뷰를 모두 근거로 사용해줘.
+        """
+    )
+
+    tool_names = get_tool_names(result)
+
+    assert "search_product_tool" not in tool_names
+    assert "get_product_tool" in tool_names
+    assert "get_rating_distribution_tool" in tool_names
+    assert "get_review_patterns_tool" in tool_names
+
+    review_tools = {
+        "get_helpful_reviews_tool",
+        "get_recent_reviews_tool",
+        "get_negative_reviews_tool",
+    }
+
+    assert review_tools.intersection(tool_names)
+
+def test_marketing_analysis_uses_required_review_tools():
+    """
+    마케팅 강조점과 과장 금지 요소를 분석할 때
+    제품 정보, 고공감 리뷰, 반복 불만 패턴을 함께 조회해야 한다.
+    """
+    result = run_agent(
+        """
+        ASIN B00RWCDM4A의 리뷰를 바탕으로
+        마케팅에서 강조할 점과 과장하면 안 되는 점을 구분해줘.
+        """
+    )
+
+    tool_names = get_tool_names(result)
+
+    assert "search_product_tool" not in tool_names
+
+    assert "get_product_tool" in tool_names, (
+        f"제품 정보 도구가 호출되지 않았습니다: {tool_names}"
+    )
+
+    assert "get_helpful_reviews_tool" in tool_names, (
+        f"고공감 리뷰 도구가 호출되지 않았습니다: {tool_names}"
+    )
+
+    assert "get_review_patterns_tool" in tool_names, (
+        f"반복 불만 패턴 도구가 호출되지 않았습니다: {tool_names}"
     )

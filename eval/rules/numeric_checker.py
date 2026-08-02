@@ -186,9 +186,25 @@ def numbers_are_close(
 
 
 def find_unsupported_numbers(case: dict) -> list[str]:
-    answer_numbers = extract_numbers(
-        case.get("answer", "")
-    )
+    answer_text = str(case.get("answer", ""))
+
+    answer_numbers = extract_numbers(answer_text)
+
+    # 백분율 합계 100%는 계산 구조상 허용한다.
+    if re.search(r"\b100(?:\.0+)?\s*%", answer_text):
+        answer_numbers.discard(
+            normalize_number("100%")
+        )
+
+    # 백분율 계산식의 × 100은 계산 상수로 허용한다.
+    if re.search(
+        r"(?:×|\*|x)\s*100\b",
+        answer_text,
+        flags=re.IGNORECASE,
+    ):
+        answer_numbers.discard(
+            normalize_number("100")
+        )
 
     allowed_numbers = extract_numbers(
         {
