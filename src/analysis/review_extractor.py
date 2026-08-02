@@ -9,11 +9,19 @@ from src.analysis.schemas import (
     ClassifiedReview,
     ExtractedTopic,
 )
+
+from src.cache.review_cache import (
+    build_review_cache_key,
+    get_cached_review,
+    set_cached_review,
+)
+
 from src.analysis.taxonomy import REVIEW_TOPICS
 
 
 load_dotenv()
 
+EXTRACTOR_CACHE_VERSION = "v1"
 
 EXTRACTION_SYSTEM_PROMPT = """
 당신은 고객 리뷰 한 건을 분석하는
@@ -214,6 +222,34 @@ def extract_review_topics(
             summary="분석할 리뷰 내용이 없습니다.",
         )
 
+    extractor_model = os.getenv(
+        "REVIEW_EXTRACTOR_MODEL",
+        os.getenv("OPENAI_MODEL", "gpt-5.6-terra"),
+    )
+    reasoning_effort = os.getenv(
+        "REVIEW_EXTRACTOR_REASONING_EFFORT",
+        "low",
+    )
+
+    extractor_version = (
+        f"{extractor_model}:"
+        f"{reasoning_effort}:"
+        f"{EXTRACTOR_CACHE_VERSION}"
+    )
+
+    cache_key = build_review_cache_key(
+        review_title=title,
+        review_text=text,
+        extractor_version=extractor_version,
+    )
+
+    cached_result = get_cached_review(cache_key)
+
+    if cached_result is not None:
+        return cached_result.model_copy(
+            update={"source_index": source_index}
+        )
+
     extractor = get_extractor_model()
 
     result = extractor.invoke(
@@ -235,12 +271,23 @@ def extract_review_topics(
         source_text=source_text,
     )
 
-    return result.model_copy(
+    final_result = result.model_copy(
         update={
             "source_index": source_index,
             "topics": validated_topics,
         }
     )
+
+    cached_result = final_result.model_copy(
+        update={"source_index": 0}
+    )
+
+    set_cached_review(
+        cache_key=cache_key,
+        result=cached_result,
+    )
+
+    return final_result
 
 
 def extract_reviews_topics(
