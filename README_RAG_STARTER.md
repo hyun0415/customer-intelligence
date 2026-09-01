@@ -1,4 +1,8 @@
-# RAG Starter Corpus
+# Legacy External RAG Starter Corpus
+
+> 이 자료는 외부 지식 RAG PoC용으로 보존됩니다. 현재 메인 RAG 범위는
+> `docs/rag_scope.md`의 사내 운영 정책 RAG이며 아래 자료를 기본 검색 대상으로
+> ingestion하지 않습니다.
 
 This package defines a small, official-source corpus for the Customer Intelligence Agent.
 

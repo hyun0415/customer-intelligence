@@ -167,6 +167,24 @@ python -m eval.run_judge <evaluation-json-path>
 ## 데이터 처리 방식 
 
 이 에이전트는 상품·리뷰와 같은 구조화 데이터에는 결정론적인 SQL 조회를 사용하고,
-외부의 비정형 문서 지식에는 Hybrid RAG를 사용합니다.
+사내 정책·SOP와 같은 비정형 운영 지식에는 Hybrid RAG를 사용합니다.
+
+RAG 검색은 PostgreSQL 기본 FTS(`ts_rank_cd`)와 pgvector cosine search를
+RRF로 결합합니다. 검색 전에 상품 범위, 유효기간, Collection, 관할, 부서
+조건을 적용하고, 검색된 Child chunk의 Parent 섹션을 Agent 문맥으로 제공합니다.
+
+스키마는 `sql/04_create_rag_schema.sql`, 정책 metadata 규칙은
+`docs/rag/policy_metadata_schema.md`에서 확인할 수 있습니다. 실제 승인된 사내
+정책 내용은 별도 입력 데이터이며 이 저장소에서 임의로 생성하지 않습니다.
+PDF ingestion을 사용할 경우 선택 의존성인 `pypdf`를 설치해야 합니다.
+
+RAG 스키마와 승인된 내부 정책 manifest는 다음 순서로 적용합니다.
+
+```powershell
+psql -f sql/04_create_rag_schema.sql
+python -m src.rag.ingestion <internal-policy-manifest.csv>
+```
+
+manifest의 `approval_status`가 `APPROVED`인 유효 버전만 운영 검색 대상이 됩니다.
 
 자세한 설계 근거는 [ADR-001](docs/adr/001-hybrid-sql-rag-architecture.md)을 참고하세요.

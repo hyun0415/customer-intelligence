@@ -1,4 +1,5 @@
 from .grounding_rules import GROUNDING_RULES
+from .internal_knowledge_rules import INTERNAL_KNOWLEDGE_RULES
 from .output_rules import OUTPUT_RULES
 from .review_rules import (
     PATTERN_TOOL_RULES,
@@ -27,6 +28,7 @@ SYSTEM_PROMPT = "\n\n".join(
         AGENT_ROLE.strip(),
         TOOL_RULES.strip(),
         GROUNDING_RULES.strip(),
+        INTERNAL_KNOWLEDGE_RULES.strip(),
         REVIEW_RULES.strip(),
         PATTERN_TOOL_RULES.strip(),
         OUTPUT_RULES.strip(),

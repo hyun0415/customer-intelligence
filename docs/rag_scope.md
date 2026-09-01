@@ -1,78 +1,53 @@
-# RAG Scope
+# Internal Policy RAG Scope
 
-## 1. 목적
+## 목적
 
-고객 리뷰에서 발견된 불만과 요구사항을 제조사 공식 문서,
-성분 안전성 자료, 규제기관 문서와 비교하여 근거가 강화된 분석을 제공한다.
+고객 리뷰에서 발견된 불만과 사내 운영 정책을 결합해 환불, 재배송, 보상,
+프로모션, escalation과 예외 승인 판단을 지원한다.
 
-## 2. 초기 대상 상품
+## 검색 책임 분리
 
-- Parent ASIN: B00RWCDM4A
-- Product: Fanola No Yellow Shampoo
+- 상품, 리뷰, 평점, 기간, helpful vote와 집계: 기존 PostgreSQL SQL Tool
+- 사내 정책, SOP, 제품 운영 가이드: PostgreSQL FTS + pgvector Hybrid RAG
+- 두 근거가 필요한 질문: SQL Tool과 RAG Tool을 모두 호출
 
-초기에는 하나의 상품만 대상으로 RAG 검색 품질을 검증한다.
+## Collection
 
-## 3. 초기 질문
+- `compensation_policy`
+- `promotion_policy`
+- `product_operation_guides`
+- `cs_sop`
+- `exception_policy`
 
-### R01 공식 사용법 비교
-제품의 공식 사용법과 고객 리뷰에서 나타난 사용 방식은 어떻게 다른가?
+## Retrieval
 
-### R02 공식 경고 확인
-리뷰에서 반복된 모발 건조, 착색, 자극 문제와 관련된
-공식 경고 또는 주의사항이 있는가?
+- Parent 800~1,200 tokens, Child 300~450 tokens, overlap 50 tokens
+- Child에 PostgreSQL `simple` FTS와 `text-embedding-3-small` 1,536차원 적용
+- `ts_rank_cd`와 cosine search 순위를 RRF(`k=60`)로 결합
+- 검색된 Child의 Parent 섹션을 최종 문맥으로 제공
+- 복잡한 reranker는 초기 범위에서 제외
 
-### R03 성분 정보
-제품의 주요 성분은 어떤 기능을 하며,
-공식 자료에서 어떤 제한이나 주의사항을 설명하는가?
+## 적용 범위와 정책 우선순위
 
-### R04 마케팅 검토
-고객 리뷰와 공식 자료를 바탕으로
-강조할 수 있는 효능과 과장하면 안 되는 표현은 무엇인가?
+- 상품 연결이 없으면 전 상품 공통 정책
+- 관할 공통값: `ALL_JURISDICTIONS`
+- 부서 공통값: `ALL_DEPARTMENTS`
+- 현재 검색에서 만료 및 미래 시행 정책 제외
+- 동일 사안은 상품 전용, 높은 authority, 최신 유효 정책 순으로 해결
+- 동일 우선순위 충돌은 자동 해결하지 않음
 
-### R05 근거 부족 처리
-관련 공식 자료가 검색되지 않을 경우
-확인되지 않았음을 명확하게 설명하는가?
+## Grounding
 
-## 4. 초기 Source Collection
+답변은 고객 리뷰 근거, 내부 정책 근거, Agent 판단을 구분한다. 정책 근거가
+없으면 운영 조치를 생성하지 않으며, 충돌이 해결되지 않으면 담당 부서 확인이
+필요함을 알린다.
 
-### manufacturer_docs
-- 제조사 공식 제품 페이지
-- 공식 사용 방법
-- 공식 성분 목록
-- 공식 주의사항 및 FAQ
+## 제외 범위
 
-### regulatory_docs
-- 화장품 표시·광고 관련 규정
-- 화장품 안전 및 이상 사례 관련 안내
+- Pinecone 및 별도 Vector DB
+- Neo4j, Graph RAG, Ontology, Knowledge Graph
+- Elasticsearch, OpenSearch
+- 복잡한 reranker, 자동 crawling, 분산 ingestion
 
-### ingredient_safety_docs
-- 주요 성분의 공식 또는 전문가 안전성 평가 문서
-
-## 5. 제외 범위
-
-초기 RAG에서는 다음 자료를 사용하지 않는다.
-
-- 일반 블로그
-- 인플루언서 콘텐츠
-- 커뮤니티 게시글
-- 출처가 불분명한 성분 설명 사이트
-- 자동 생성된 검색 요약
-- Graph RAG
-- Neo4j
-- Ontology
-
-## 6. 검색 방식
-
-- PostgreSQL Full Text Search
-- pgvector Embedding Search
-- Metadata Filtering
-- Hybrid Search 결과 결합
-- 문서명, 발행기관, URL, 섹션 단위 출처 제공
-
-## 7. 성공 기준
-
-- 정답 근거 문서가 검색 결과 Top 5 안에 포함된다.
-- 다른 상품의 문서가 혼입되지 않는다.
-- 제조사 주장과 규제기관 정보를 구분한다.
-- 고객 리뷰의 주장을 외부 자료가 검증한 사실처럼 표현하지 않는다.
-- 검색 근거가 부족하면 답변을 제한한다.
+기존 Fanola, FDA, CIR 자료는 삭제하지 않지만 외부 지식 RAG PoC 자료로만
+보존하며 메인 사내 정책 검색 대상에서는 제외한다.

@@ -1,0 +1,2 @@
+source_id,collection,source_type,authority_tier,publisher,title,source_url,local_path,parent_asins,language,jurisdiction,department,policy_key,approval_status,version_number,valid_from,valid_to,supersedes_version,section_path,rule_key,rule_effect,ingest
+example_reshipment_policy,compensation_policy,approved_policy,1,Customer Operations,재배송 정책,,data/rag/internal_policies/reshipment_policy.md,,ko,ALL_JURISDICTIONS,CS,reshipment_policy,DRAFT,1,2026-01-01T00:00:00+09:00,,,,reshipment_eligibility,,no

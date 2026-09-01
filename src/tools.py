@@ -16,6 +16,7 @@ from src.database import (
 
 from src.analysis.schemas import ReviewSelectionCriteria
 from src.analysis.review_patterns import build_review_patterns
+from src.rag_tools import search_internal_knowledge_tool
 
 
 
@@ -165,6 +166,7 @@ AGENT_TOOLS = [
     get_monthly_review_trend_tool,
     compare_products_tool,
     get_review_patterns_tool,
+    search_internal_knowledge_tool,
 ]
 
 
