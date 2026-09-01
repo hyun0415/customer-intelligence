@@ -14,8 +14,8 @@ model = ChatOpenAI(
     model=os.getenv("OPENAI_MODEL", "gpt-5.6-terra"),
     reasoning_effort="low",
     use_responses_api=True,
-    timeout=60,
-    max_retries=0,
+    timeout=float(os.getenv("OPENAI_TIMEOUT_SECONDS", "90")),
+    max_retries=int(os.getenv("OPENAI_MAX_RETRIES", "2")),
 )
 
 agent = create_agent(

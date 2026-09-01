@@ -19,6 +19,11 @@ Customer Intelligence Agent는 서로 다른 성격의 근거를 사용한다.
 사내 비정형 문서는 PostgreSQL Full Text Search와 pgvector를 이용한
 Hybrid RAG로 검색한다.
 
+Vector 검색에는 보정된 최소 관련성 기준을 적용한다. 기준 미달 후보는 제거하되
+FTS에서 명확히 일치한 후보는 유지하며, 남은 후보가 없으면 `no_evidence`를
+반환한다. 기본 cosine similarity는 0.33이고 운영 평가 결과에 따라 설정으로
+조정한다.
+
 Agent는 질문의 목적에 따라 다음 경로를 선택하거나 조합한다.
 
 - 고객 경험과 수치 분석 → SQL Tool

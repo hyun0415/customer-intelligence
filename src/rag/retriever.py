@@ -127,6 +127,7 @@ class HybridRetriever:
               AND c.embedding IS NOT NULL
               AND c.embedding_model = %s
               AND {filters}
+              AND 1 - (c.embedding <=> %s) >= %s
             ORDER BY c.embedding <=> %s, c.chunk_id
             LIMIT %s
         """
@@ -136,6 +137,8 @@ class HybridRetriever:
             [
                 self.settings.embedding_model,
                 *params,
+                Vector(query_embedding),
+                self.settings.minimum_relevance_similarity,
                 Vector(query_embedding),
                 self.settings.candidate_limit,
             ],
@@ -349,6 +352,11 @@ class HybridRetriever:
                 "dense": self.settings.embedding_model,
                 "fusion": "rrf",
                 "rrf_k": self.settings.rrf_k,
+                "minimum_relevance": {
+                    "metric": "cosine_similarity",
+                    "threshold": self.settings.minimum_relevance_similarity,
+                    "fts_matches_bypass_vector_threshold": True,
+                },
                 "fts_candidates": len(fts_rows),
                 "vector_candidates": len(vector_rows),
             },

@@ -44,6 +44,11 @@ class RagSettings:
     candidate_limit: int = field(
         default_factory=lambda: int(os.getenv("RAG_CANDIDATE_LIMIT", "20"))
     )
+    minimum_relevance_similarity: float = field(
+        default_factory=lambda: float(
+            os.getenv("RAG_MINIMUM_RELEVANCE_SIMILARITY", "0.33")
+        )
+    )
 
     def validate(self) -> None:
         if not 0 <= self.overlap_tokens < self.child_max_tokens:
@@ -58,3 +63,5 @@ class RagSettings:
             raise ValueError("현재 DB vector column은 1536차원으로 고정되어 있습니다.")
         if self.rrf_k <= 0 or self.candidate_limit <= 0:
             raise ValueError("RRF와 candidate 설정은 양수여야 합니다.")
+        if not 0.0 <= self.minimum_relevance_similarity <= 1.0:
+            raise ValueError("최소 관련성 cosine similarity는 0~1 사이여야 합니다.")

@@ -24,6 +24,8 @@
 - Parent 800~1,200 tokens, Child 300~450 tokens, overlap 50 tokens
 - Child에 PostgreSQL `simple` FTS와 `text-embedding-3-small` 1,536차원 적용
 - `ts_rank_cd`와 cosine search 순위를 RRF(`k=60`)로 결합
+- Vector 후보에는 최소 관련성 기준(cosine similarity 기본 `0.33`)을 적용
+- FTS에서 명확히 일치한 후보는 Vector 최소 관련성 기준과 무관하게 유지
 - 검색된 Child의 Parent 섹션을 최종 문맥으로 제공
 - 복잡한 reranker는 초기 범위에서 제외
 
@@ -41,6 +43,10 @@
 답변은 고객 리뷰 근거, 내부 정책 근거, Agent 판단을 구분한다. 정책 근거가
 없으면 운영 조치를 생성하지 않으며, 충돌이 해결되지 않으면 담당 부서 확인이
 필요함을 알린다.
+
+최소 관련성 기준을 통과한 Vector 후보와 FTS 일치 후보가 모두 없으면
+`no_evidence`를 반환한다. 기본 임계값은 승인 정책의 관련·무관 질문 평가로
+보정했으며 `RAG_MINIMUM_RELEVANCE_SIMILARITY` 환경변수로 조정한다.
 
 ## 제외 범위
 

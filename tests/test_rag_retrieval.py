@@ -1,5 +1,7 @@
 from datetime import datetime, timezone
 
+import pytest
+
 from src.rag.config import RagSettings
 from src.rag.models import KnowledgeSearchRequest
 from src.rag.retriever import HybridRetriever
@@ -135,3 +137,34 @@ def test_equal_priority_different_rule_effects_return_conflict():
     conflicts = HybridRetriever._conflicts(rows)
     assert len(conflicts) == 1
     assert conflicts[0].source_ids == ["policy-a", "policy-b"]
+
+
+class CapturingConnection:
+    def __init__(self):
+        self.query = ""
+        self.params = []
+
+    def execute(self, query, params):
+        self.query = query
+        self.params = params
+        return self
+
+    def fetchall(self):
+        return []
+
+
+def test_vector_candidates_apply_minimum_relevance_similarity():
+    instance = retriever()
+    conn = CapturingConnection()
+    request = KnowledgeSearchRequest(query="관련 정책", jurisdiction="KR")
+
+    rows = instance._vector_candidates(conn, request, NOW, [0.0] * 1536)
+
+    assert rows == []
+    assert "1 - (c.embedding <=> %s) >= %s" in conn.query
+    assert conn.params[-3] == instance.settings.minimum_relevance_similarity
+
+
+def test_minimum_relevance_similarity_must_be_between_zero_and_one():
+    with pytest.raises(ValueError, match="최소 관련성"):
+        RagSettings(minimum_relevance_similarity=1.01).validate()

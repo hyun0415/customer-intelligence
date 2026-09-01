@@ -1,6 +1,6 @@
 # Sample Commerce 환불 정책
 
-> 상태: **DRAFT — 승인 전 사용 및 ingestion 금지**  
+> 상태: **APPROVED**  
 > 버전: 1  
 > 관할: KR  
 > 적용 상품: 전 상품  
