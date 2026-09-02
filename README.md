@@ -197,6 +197,10 @@ ColBERT 재정렬 의존성은 별도로 설치합니다. 최초 실행 시 BGE-
 
 주요 설정은 `RAG_RERANKER_MODEL`, `RAG_RERANKER_DEVICE`,
 `RAG_RERANKER_BATCH_SIZE`, `RAG_EVIDENCE_MODEL` 환경변수로 변경할 수 있습니다.
+고정 평가 결과에 따라 채널별 후보 기본값은 10개입니다. reranker 실패 시 기본적으로
+RRF 순서로 복귀하며(`RAG_RERANKER_FALLBACK_TO_RRF=true`), LLM 근거 판정 실패는
+기존처럼 `no_evidence`로 안전하게 종료합니다. 근거 판정 timeout/retry 기본값은
+15초/1회입니다.
 
 세 RAG 단계를 동일한 고정 질문으로 비교하려면 다음을 실행합니다. 공통 OpenAI
 질문 embedding은 측정 전에 한 번 생성하므로, 보고되는 지연시간은 PostgreSQL
@@ -211,6 +215,24 @@ python -m eval.rag_pipeline_comparison --stages full --case-id RP12
 결과는 `eval/results/rag_pipeline_comparison_*.json`과 `.csv`로 저장됩니다.
 스크립트는 임의 합격선을 적용하지 않고 Recall@K, MRR, 상태 정확도,
 `no_evidence` precision/recall/F1 및 단계별 지연시간을 보고합니다.
+
+Colab에서 계산한 BGE-M3 점수를 사용해 로컬 모델 로드 없이 PostgreSQL과 LLM 근거
+판정을 검증할 수 있습니다.
+
+```powershell
+python -m eval.rag_pipeline_comparison --stages full `
+  --precomputed-rerank-results eval/results/colab_bge_m3_rerank_results.json
+```
+
+후보 수를 비교할 때는 `--candidate-limit 5`, `10`, `20`처럼 채널별 후보 수를
+명시합니다.
+
+CPU 운영 가능성과 후보 수별 지연시간은 먼저 안전 점검한 뒤 측정합니다.
+
+```powershell
+python -m eval.rag_reranker_benchmark --preflight-only
+python -m eval.rag_reranker_benchmark --candidate-limits 10,20,30,50
+```
 
 로컬 GPU가 없는 경우 PostgreSQL 후보를 내보낸 뒤 Colab 노트북에서 BGE-M3
 재정렬만 실행할 수 있습니다.

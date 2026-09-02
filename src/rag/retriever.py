@@ -244,6 +244,19 @@ class HybridRetriever:
             )
         return sorted(ranked, key=self._rank_key)
 
+    def _rerank_with_fallback(
+        self,
+        query: str,
+        rows: list[dict[str, Any]],
+        parents: dict[int, dict[str, Any]],
+    ) -> tuple[list[dict[str, Any]], str | None]:
+        try:
+            return self._rerank(query, rows, parents), None
+        except (OSError, RuntimeError, TimeoutError, ValueError) as exc:
+            if not self.settings.reranker_fallback_to_rrf:
+                raise
+            return rows, type(exc).__name__
+
     @staticmethod
     def _resolve_policy_priority(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
@@ -392,7 +405,9 @@ class HybridRetriever:
             )
             fused = self._fuse(fts_rows, vector_rows)
             parents = self._load_parents(conn, fused)
-            fused = self._rerank(request.query, fused, parents)
+            fused, reranker_error = self._rerank_with_fallback(
+                request.query, fused, parents
+            )
             fused = self._resolve_policy_priority(fused)
             conflicts = self._conflicts(fused)
             fused = fused[: request.limit]
@@ -494,6 +509,12 @@ class HybridRetriever:
                         "model": self.settings.reranker_model,
                         "mode": "multi_vector_colbert",
                         "device": self.settings.reranker_device,
+                        "failure_policy": (
+                            "rrf_fallback"
+                            if self.settings.reranker_fallback_to_rrf
+                            else "raise"
+                        ),
+                        "error": reranker_error,
                     }
                     if self.reranker is not None
                     else None

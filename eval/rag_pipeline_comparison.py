@@ -1,5 +1,6 @@
 import argparse
 import csv
+import hashlib
 import json
 from collections.abc import Callable
 from dataclasses import replace
@@ -19,7 +20,7 @@ from src.rag.config import RagSettings
 from src.rag.embeddings import EmbeddingProvider, OpenAIEmbeddingProvider
 from src.rag.evidence import LLMEvidenceValidator
 from src.rag.models import KnowledgeSearchRequest, KnowledgeSearchResponse
-from src.rag.rerankers import BGEM3ColbertReranker
+from src.rag.rerankers import BGEM3ColbertReranker, Reranker
 from src.rag.retriever import HybridRetriever
 
 StageName = Literal["baseline", "rerank", "full"]
@@ -116,6 +117,36 @@ class CachedEmbeddingProvider:
     def preload_queries(self, texts: list[str]) -> None:
         for text in dict.fromkeys(texts):
             self.embed_query(text)
+
+
+class PrecomputedColbertReranker:
+    """Colab에서 계산한 BGE-M3 점수를 동일 평가 입력에 재사용한다."""
+
+    def __init__(self, result_path: Path) -> None:
+        payload = json.loads(result_path.read_text(encoding="utf-8"))
+        self._scores: dict[str, dict[str, float]] = {}
+        for case in payload.get("cases", []):
+            query = case["question"]
+            self._scores[query] = {
+                self._passage_key(candidate["content"]): float(
+                    candidate["colbert_score"]
+                )
+                for candidate in case.get("top_candidates", [])
+            }
+
+    @staticmethod
+    def _passage_key(passage: str) -> str:
+        return hashlib.sha256(passage.encode("utf-8")).hexdigest()
+
+    def score(self, query: str, passages: list[str]) -> list[float]:
+        query_scores = self._scores.get(query)
+        if query_scores is None:
+            raise ValueError(f"사전 계산된 ColBERT 질문이 없습니다: {query}")
+        floor = min(query_scores.values(), default=0.0) - 1.0
+        return [
+            query_scores.get(self._passage_key(passage), floor)
+            for passage in passages
+        ]
 
 
 def _source_metrics(
@@ -266,12 +297,18 @@ def summarize_stage(
 
 
 def build_retrievers(
-    stages: list[StageName], query_texts: list[str]
+    stages: list[StageName],
+    query_texts: list[str],
+    precomputed_rerank_results: Path | None = None,
+    candidate_limit: int | None = None,
 ) -> dict[StageName, HybridRetriever]:
-    base_settings = RagSettings(
-        reranker_enabled=False,
-        evidence_validation_enabled=False,
-    )
+    settings_overrides = {
+        "reranker_enabled": False,
+        "evidence_validation_enabled": False,
+    }
+    if candidate_limit is not None:
+        settings_overrides["candidate_limit"] = candidate_limit
+    base_settings = RagSettings(**settings_overrides)
     embeddings = CachedEmbeddingProvider(OpenAIEmbeddingProvider(base_settings))
     embeddings.preload_queries(query_texts)
     retrievers: dict[StageName, HybridRetriever] = {}
@@ -282,10 +319,14 @@ def build_retrievers(
             settings=base_settings,
         )
 
-    reranker = None
+    reranker: Reranker | None = None
     rerank_settings = replace(base_settings, reranker_enabled=True)
     if "rerank" in stages or "full" in stages:
-        reranker = BGEM3ColbertReranker(rerank_settings)
+        reranker = (
+            PrecomputedColbertReranker(precomputed_rerank_results)
+            if precomputed_rerank_results
+            else BGEM3ColbertReranker(rerank_settings)
+        )
 
     if "rerank" in stages:
         retrievers["rerank"] = HybridRetriever(
@@ -371,7 +412,22 @@ def main() -> None:
         help="특정 case만 실행합니다. 여러 번 지정할 수 있습니다.",
     )
     parser.add_argument("--output-dir", type=Path, default=OUTPUT_DIR)
+    parser.add_argument(
+        "--candidate-limit",
+        type=int,
+        help="FTS와 embedding 채널에서 각각 가져올 후보 수를 지정합니다.",
+    )
+    parser.add_argument(
+        "--precomputed-rerank-results",
+        type=Path,
+        help=(
+            "Colab BGE-M3 결과 JSON을 재사용합니다. 로컬에서 모델을 로드하지 않고 "
+            "동일 고정 평가 세트의 full 단계를 실행할 때 사용합니다."
+        ),
+    )
     args = parser.parse_args()
+    if args.candidate_limit is not None and args.candidate_limit <= 0:
+        parser.error("--candidate-limit은 양수여야 합니다.")
 
     load_dotenv()
     cases = [PipelineEvalCase.model_validate(case) for case in RAG_PIPELINE_CASES]
@@ -384,7 +440,10 @@ def main() -> None:
 
     try:
         retrievers = build_retrievers(
-            args.stages, [case.question for case in cases]
+            args.stages,
+            [case.question for case in cases],
+            precomputed_rerank_results=args.precomputed_rerank_results,
+            candidate_limit=args.candidate_limit,
         )
     except (
         OpenAIError,

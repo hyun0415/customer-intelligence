@@ -206,6 +206,35 @@ def test_colbert_reranker_reorders_parents_by_token_level_score():
     assert ranked[0]["colbert_score"] == pytest.approx(0.87)
 
 
+def test_reranker_failure_falls_back_to_rrf_order():
+    class FailingReranker:
+        def score(self, query, passages):
+            raise RuntimeError("model unavailable")
+
+    instance = HybridRetriever(
+        connection_factory=lambda: None,
+        embedding_provider=FakeEmbeddings(),
+        reranker=FailingReranker(),
+        settings=RagSettings(
+            evidence_validation_enabled=False,
+            reranker_fallback_to_rrf=True,
+        ),
+    )
+    rows = instance._fuse(
+        [candidate(chunk_id=1, parent_chunk_id=10, source_id="rrf-first")],
+        [candidate(chunk_id=2, parent_chunk_id=20, source_id="rrf-second")],
+    )
+    parents = {
+        10: {"chunk_text": "첫 번째"},
+        20: {"chunk_text": "두 번째"},
+    }
+
+    ranked, error = instance._rerank_with_fallback("질문", rows, parents)
+
+    assert ranked == rows
+    assert error == "RuntimeError"
+
+
 def test_bge_m3_reranker_uses_only_colbert_mode():
     class FakeBGEModel:
         def __init__(self):

@@ -8,7 +8,7 @@
 __pycache__/
 *.py[cod]
 .pytest_cache/
-.pytest-tmp/
+.pytest-tmp*/
 
 # 평가 및 임시 파일
 *.log

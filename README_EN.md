@@ -187,4 +187,10 @@ python -m eval.rag_pipeline_comparison
 JSON and CSV reports are written under `eval/results/` without applying an
 arbitrary acceptance threshold.
 
+The evaluated default is 10 candidates per retrieval channel. Reranker
+failures fall back to RRF order by default
+(`RAG_RERANKER_FALLBACK_TO_RRF=true`), while evidence-validation failures
+remain fail-closed as `no_evidence`. The evidence timeout/retry defaults are 15
+seconds and one retry.
+
 See [ADR-001](docs/adr/001-hybrid-sql-rag-architecture.md).

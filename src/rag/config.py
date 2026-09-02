@@ -49,7 +49,7 @@ class RagSettings:
     )
     rrf_k: int = field(default_factory=lambda: int(os.getenv("RAG_RRF_K", "60")))
     candidate_limit: int = field(
-        default_factory=lambda: int(os.getenv("RAG_CANDIDATE_LIMIT", "20"))
+        default_factory=lambda: int(os.getenv("RAG_CANDIDATE_LIMIT", "10"))
     )
     minimum_relevance_similarity: float = field(
         default_factory=lambda: float(
@@ -76,6 +76,9 @@ class RagSettings:
             os.getenv("RAG_RERANKER_PASSAGE_MAX_TOKENS", "2048")
         )
     )
+    reranker_fallback_to_rrf: bool = field(
+        default_factory=lambda: _env_bool("RAG_RERANKER_FALLBACK_TO_RRF", True)
+    )
     evidence_validation_enabled: bool = field(
         default_factory=lambda: _env_bool("RAG_EVIDENCE_VALIDATION_ENABLED", True)
     )
@@ -86,11 +89,11 @@ class RagSettings:
     )
     evidence_timeout_seconds: float = field(
         default_factory=lambda: float(
-            os.getenv("RAG_EVIDENCE_TIMEOUT_SECONDS", "90")
+            os.getenv("RAG_EVIDENCE_TIMEOUT_SECONDS", "15")
         )
     )
     evidence_max_retries: int = field(
-        default_factory=lambda: int(os.getenv("RAG_EVIDENCE_MAX_RETRIES", "2"))
+        default_factory=lambda: int(os.getenv("RAG_EVIDENCE_MAX_RETRIES", "1"))
     )
 
     def validate(self) -> None:
