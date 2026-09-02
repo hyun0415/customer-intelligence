@@ -24,6 +24,12 @@ FTS에서 명확히 일치한 후보는 유지하며, 남은 후보가 없으면
 반환한다. 기본 cosine similarity는 0.33이고 운영 평가 결과에 따라 설정으로
 조정한다.
 
+PostgreSQL Hybrid Retrieval이 만든 후보는 BGE-M3의 multi-vector 출력만 사용해
+ColBERT 방식으로 재정렬한다. 별도 multi-vector DB는 도입하지 않고 상위 후보를
+애플리케이션에서 재정렬한다. 이후 LLM 구조화 판정이 질문에 직접 답할 근거인지
+`sufficient`, `insufficient`, `conflict`로 판정한다. 최소 관련성 수치는 최종
+답변 가능 여부를 결정하지 않는다.
+
 Agent는 질문의 목적에 따라 다음 경로를 선택하거나 조합한다.
 
 - 고객 경험과 수치 분석 → SQL Tool
@@ -87,6 +93,14 @@ Agent는 질문의 목적에 따라 다음 경로를 선택하거나 조합한�
 다단계 관계 추론보다 문서 검색과 구조화 집계가 핵심이며,
 별도 그래프 DB 운영 비용과 동기화 복잡도가 더 크다.
 
+### BGE-M3 통합 Hybrid Retrieval로 전체 교체
+
+채택하지 않음.
+
+PostgreSQL FTS와 기존 OpenAI embedding 검색이 이미 후보 생성 역할을 수행한다.
+BGE-M3의 dense와 sparse 출력을 중복 도입하지 않고, 세부 조건 대응을 개선하는
+multi-vector ColBERT 기능만 제한적으로 사용한다.
+
 ## 최종 구조
 
 사용자 질문
@@ -94,6 +108,7 @@ Agent는 질문의 목적에 따라 다음 경로를 선택하거나 조합한�
 LangGraph Agent
     ├─ PostgreSQL Review/Product Tools
     ├─ Internal Policy Hybrid Retriever
+    │    └─ PostgreSQL 후보 → ColBERT 재정렬 → LLM 근거 판정
     └─ 필요 시 두 결과 통합
              ↓
 고객 리뷰 근거와 내부 정책 근거를 구분한 답변

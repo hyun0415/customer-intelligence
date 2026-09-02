@@ -166,6 +166,25 @@ This README currently focuses on the problem definition, analysis architecture, 
 ## Source Data
 
 The agent combines deterministic SQL retrieval for structured product and
-review data with hybrid RAG for unstructured external knowledge.
+review data with hybrid RAG for internal operational policies. PostgreSQL FTS
+and pgvector generate candidates, BGE-M3 multi-vector scoring reranks them with
+ColBERT late interaction, and a structured LLM check permits only directly
+supported evidence to reach the Agent.
+
+Install the optional local reranking dependencies before running policy search:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements-rag-rerank.txt
+```
+
+Compare the PostgreSQL baseline, ColBERT reranking, and full evidence-validation
+pipeline with the same fixed Korean cases:
+
+```powershell
+python -m eval.rag_pipeline_comparison
+```
+
+JSON and CSV reports are written under `eval/results/` without applying an
+arbitrary acceptance threshold.
 
 See [ADR-001](docs/adr/001-hybrid-sql-rag-architecture.md).

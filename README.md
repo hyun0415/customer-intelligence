@@ -171,7 +171,8 @@ python -m eval.run_judge <evaluation-json-path>
 
 RAG 검색은 PostgreSQL 기본 FTS(`ts_rank_cd`)와 pgvector cosine search를
 RRF로 결합합니다. 검색 전에 상품 범위, 유효기간, Collection, 관할, 부서
-조건을 적용하고, 검색된 Child chunk의 Parent 섹션을 Agent 문맥으로 제공합니다.
+조건을 적용합니다. 후보 Parent 섹션은 BGE-M3 multi-vector(ColBERT)로 재정렬한
+뒤 LLM 구조화 판정에서 직접 근거로 확인된 경우에만 Agent 문맥으로 제공합니다.
 
 스키마는 `sql/04_create_rag_schema.sql`, 정책 metadata 규칙은
 `docs/rag/policy_metadata_schema.md`에서 확인할 수 있습니다. 실제 승인된 사내
@@ -186,5 +187,40 @@ python -m src.rag.ingestion <internal-policy-manifest.csv>
 ```
 
 manifest의 `approval_status`가 `APPROVED`인 유효 버전만 운영 검색 대상이 됩니다.
+
+ColBERT 재정렬 의존성은 별도로 설치합니다. 최초 실행 시 BGE-M3 모델을
+다운로드하며, 현재 기본 설정은 CPU와 작은 batch를 사용합니다.
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements-rag-rerank.txt
+```
+
+주요 설정은 `RAG_RERANKER_MODEL`, `RAG_RERANKER_DEVICE`,
+`RAG_RERANKER_BATCH_SIZE`, `RAG_EVIDENCE_MODEL` 환경변수로 변경할 수 있습니다.
+
+세 RAG 단계를 동일한 고정 질문으로 비교하려면 다음을 실행합니다. 공통 OpenAI
+질문 embedding은 측정 전에 한 번 생성하므로, 보고되는 지연시간은 PostgreSQL
+검색 이후 ColBERT와 근거 판정이 추가하는 비용을 비교합니다.
+
+```powershell
+python -m eval.rag_pipeline_comparison
+python -m eval.rag_pipeline_comparison --stages baseline,rerank
+python -m eval.rag_pipeline_comparison --stages full --case-id RP12
+```
+
+결과는 `eval/results/rag_pipeline_comparison_*.json`과 `.csv`로 저장됩니다.
+스크립트는 임의 합격선을 적용하지 않고 Recall@K, MRR, 상태 정확도,
+`no_evidence` precision/recall/F1 및 단계별 지연시간을 보고합니다.
+
+로컬 GPU가 없는 경우 PostgreSQL 후보를 내보낸 뒤 Colab 노트북에서 BGE-M3
+재정렬만 실행할 수 있습니다.
+
+```powershell
+python -m eval.export_colab_rerank_input
+```
+
+생성된 `eval/results/colab_rerank_input.json`을
+`notebook/colab_bge_m3_rerank_eval.ipynb` 실행 중 업로드합니다. Colab 결과 JSON은
+로컬의 full 단계 결과와 결합해 근거 판정 전후를 비교할 수 있습니다.
 
 자세한 설계 근거는 [ADR-001](docs/adr/001-hybrid-sql-rag-architecture.md)을 참고하세요.

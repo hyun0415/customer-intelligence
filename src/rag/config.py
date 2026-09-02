@@ -12,6 +12,13 @@ DEFAULT_COLLECTIONS = (
 )
 
 
+def _env_bool(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
 @dataclass(frozen=True)
 class RagSettings:
     embedding_model: str = field(
@@ -49,6 +56,42 @@ class RagSettings:
             os.getenv("RAG_MINIMUM_RELEVANCE_SIMILARITY", "0.33")
         )
     )
+    reranker_enabled: bool = field(
+        default_factory=lambda: _env_bool("RAG_RERANKER_ENABLED", True)
+    )
+    reranker_model: str = field(
+        default_factory=lambda: os.getenv("RAG_RERANKER_MODEL", "BAAI/bge-m3")
+    )
+    reranker_device: str = field(
+        default_factory=lambda: os.getenv("RAG_RERANKER_DEVICE", "cpu")
+    )
+    reranker_batch_size: int = field(
+        default_factory=lambda: int(os.getenv("RAG_RERANKER_BATCH_SIZE", "2"))
+    )
+    reranker_query_max_tokens: int = field(
+        default_factory=lambda: int(os.getenv("RAG_RERANKER_QUERY_MAX_TOKENS", "256"))
+    )
+    reranker_passage_max_tokens: int = field(
+        default_factory=lambda: int(
+            os.getenv("RAG_RERANKER_PASSAGE_MAX_TOKENS", "2048")
+        )
+    )
+    evidence_validation_enabled: bool = field(
+        default_factory=lambda: _env_bool("RAG_EVIDENCE_VALIDATION_ENABLED", True)
+    )
+    evidence_model: str = field(
+        default_factory=lambda: os.getenv(
+            "RAG_EVIDENCE_MODEL", os.getenv("OPENAI_MODEL", "gpt-5.6-terra")
+        )
+    )
+    evidence_timeout_seconds: float = field(
+        default_factory=lambda: float(
+            os.getenv("RAG_EVIDENCE_TIMEOUT_SECONDS", "90")
+        )
+    )
+    evidence_max_retries: int = field(
+        default_factory=lambda: int(os.getenv("RAG_EVIDENCE_MAX_RETRIES", "2"))
+    )
 
     def validate(self) -> None:
         if not 0 <= self.overlap_tokens < self.child_max_tokens:
@@ -65,3 +108,9 @@ class RagSettings:
             raise ValueError("RRF와 candidate 설정은 양수여야 합니다.")
         if not 0.0 <= self.minimum_relevance_similarity <= 1.0:
             raise ValueError("최소 관련성 cosine similarity는 0~1 사이여야 합니다.")
+        if self.reranker_batch_size <= 0:
+            raise ValueError("reranker batch size는 양수여야 합니다.")
+        if self.reranker_query_max_tokens <= 0 or self.reranker_passage_max_tokens <= 0:
+            raise ValueError("reranker token 제한은 양수여야 합니다.")
+        if self.evidence_timeout_seconds <= 0 or self.evidence_max_retries < 0:
+            raise ValueError("근거 판정 timeout/retry 설정이 올바르지 않습니다.")

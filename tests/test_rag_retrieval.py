@@ -3,7 +3,8 @@ from datetime import datetime, timezone
 import pytest
 
 from src.rag.config import RagSettings
-from src.rag.models import KnowledgeSearchRequest
+from src.rag.models import EvidenceAssessment, KnowledgeSearchRequest, KnowledgeSource
+from src.rag.rerankers import BGEM3ColbertReranker
 from src.rag.retriever import HybridRetriever
 
 NOW = datetime(2026, 9, 1, tzinfo=timezone.utc)
@@ -168,3 +169,113 @@ def test_vector_candidates_apply_minimum_relevance_similarity():
 def test_minimum_relevance_similarity_must_be_between_zero_and_one():
     with pytest.raises(ValueError, match="최소 관련성"):
         RagSettings(minimum_relevance_similarity=1.01).validate()
+
+
+class FixedReranker:
+    def __init__(self, scores):
+        self.scores = scores
+
+    def score(self, query, passages):
+        assert query == "두 번째 무료 재배송"
+        assert len(passages) == 2
+        return self.scores
+
+
+def test_colbert_reranker_reorders_parents_by_token_level_score():
+    instance = HybridRetriever(
+        connection_factory=lambda: None,
+        embedding_provider=FakeEmbeddings(),
+        reranker=FixedReranker([0.21, 0.87]),
+        settings=RagSettings(evidence_validation_enabled=False),
+    )
+    rows = instance._fuse(
+        [
+            candidate(chunk_id=1, parent_chunk_id=10, source_id="generic"),
+            candidate(chunk_id=2, parent_chunk_id=20, source_id="exact"),
+        ],
+        [],
+    )
+    parents = {
+        10: {"chunk_text": "일반 재배송 정책"},
+        20: {"chunk_text": "동일 사고의 무료 재배송은 한 번만 가능"},
+    }
+
+    ranked = instance._rerank("두 번째 무료 재배송", rows, parents)
+
+    assert [row["source_id"] for row in ranked] == ["exact", "generic"]
+    assert ranked[0]["colbert_score"] == pytest.approx(0.87)
+
+
+def test_bge_m3_reranker_uses_only_colbert_mode():
+    class FakeBGEModel:
+        def __init__(self):
+            self.kwargs = None
+
+        def compute_score(self, pairs, **kwargs):
+            self.kwargs = kwargs
+            assert pairs == [("질문", "첫 번째"), ("질문", "두 번째")]
+            return {"colbert": [0.2, 0.8]}
+
+    instance = BGEM3ColbertReranker(RagSettings())
+    instance._model = FakeBGEModel()
+
+    scores = instance.score("질문", ["첫 번째", "두 번째"])
+
+    assert scores == [0.2, 0.8]
+    assert instance._model.kwargs["weights_for_different_modes"] == [0.0, 0.0, 1.0]
+    assert instance._model.kwargs["max_passage_length"] == 2048
+
+
+def test_evidence_assessment_schema_supports_yes_no_and_conflict():
+    assert EvidenceAssessment(
+        status="sufficient",
+        reason="직접 근거",
+        supported_source_ids=["p1"],
+        supported_parent_chunk_ids=[10],
+    ).status == "sufficient"
+    assert EvidenceAssessment(
+        status="insufficient", reason="금액 근거 없음", missing_information=["금액"]
+    ).status == "insufficient"
+    assert EvidenceAssessment(
+        status="conflict", reason="정책 결론 충돌", supported_source_ids=["p1", "p2"]
+    ).status == "conflict"
+
+
+def test_evidence_gate_exposes_only_sources_approved_by_validator():
+    sources = [
+        KnowledgeSource.model_construct(source_id="policy", parent_chunk_id=10),
+        KnowledgeSource.model_construct(source_id="policy", parent_chunk_id=20),
+    ]
+    assessment = EvidenceAssessment(
+        status="sufficient",
+        reason="두 번째 근거만 질문 조건을 직접 명시합니다.",
+        supported_source_ids=["policy"],
+        supported_parent_chunk_ids=[20],
+    )
+
+    status, accepted, conflicts, _ = HybridRetriever._apply_evidence_assessment(
+        sources, assessment
+    )
+
+    assert status == "ok"
+    assert [source.parent_chunk_id for source in accepted] == [20]
+    assert conflicts == []
+
+
+def test_evidence_gate_converts_insufficient_to_no_evidence():
+    sources = [
+        KnowledgeSource.model_construct(source_id="general-policy", parent_chunk_id=10)
+    ]
+    assessment = EvidenceAssessment(
+        status="insufficient",
+        reason="질문에 제시된 보상 금액이 근거에 없습니다.",
+        missing_information=["보상 금액"],
+    )
+
+    status, accepted, conflicts, _ = HybridRetriever._apply_evidence_assessment(
+        sources, assessment
+    )
+
+    assert status == "no_evidence"
+    assert accepted == []
+    assert conflicts == []

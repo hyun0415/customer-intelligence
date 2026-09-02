@@ -26,8 +26,10 @@
 - `ts_rank_cd`와 cosine search 순위를 RRF(`k=60`)로 결합
 - Vector 후보에는 최소 관련성 기준(cosine similarity 기본 `0.33`)을 적용
 - FTS에서 명확히 일치한 후보는 Vector 최소 관련성 기준과 무관하게 유지
-- 검색된 Child의 Parent 섹션을 최종 문맥으로 제공
-- 복잡한 reranker는 초기 범위에서 제외
+- 검색된 Child의 Parent 섹션을 BGE-M3 multi-vector(ColBERT)로 재정렬
+- BGE-M3에서는 dense/sparse 출력을 사용하지 않고 ColBERT 점수만 사용
+- LLM 구조화 판정으로 상위 근거를 `sufficient`, `insufficient`, `conflict`로 분류
+- `sufficient`로 확인된 Parent 섹션만 최종 Agent 문맥으로 제공
 
 ## 적용 범위와 정책 우선순위
 
@@ -44,16 +46,18 @@
 없으면 운영 조치를 생성하지 않으며, 충돌이 해결되지 않으면 담당 부서 확인이
 필요함을 알린다.
 
-최소 관련성 기준을 통과한 Vector 후보와 FTS 일치 후보가 모두 없으면
-`no_evidence`를 반환한다. 기본 임계값은 승인 정책의 관련·무관 질문 평가로
-보정했으며 `RAG_MINIMUM_RELEVANCE_SIMILARITY` 환경변수로 조정한다.
+최소 관련성 기준은 명백히 무관한 Vector 후보를 줄이는 1차 비용 필터다.
+최종 답변 가능 여부를 의미하지 않는다. 후보가 없거나 LLM 근거 판정 결과가
+`insufficient`이면 `no_evidence`를 반환한다. `conflict`이면 Agent가 임의로
+해결하지 않는다. 근거 판정 API가 실패해도 답변을 강행하지 않고 안전하게
+`no_evidence`와 재시도·담당자 확인 사유를 반환한다.
 
 ## 제외 범위
 
 - Pinecone 및 별도 Vector DB
 - Neo4j, Graph RAG, Ontology, Knowledge Graph
 - Elasticsearch, OpenSearch
-- 복잡한 reranker, 자동 crawling, 분산 ingestion
+- 별도 multi-vector DB, 자동 crawling, 분산 ingestion
 
 기존 Fanola, FDA, CIR 자료는 삭제하지 않지만 외부 지식 RAG PoC 자료로만
 보존하며 메인 사내 정책 검색 대상에서는 제외한다.

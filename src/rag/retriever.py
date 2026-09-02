@@ -3,17 +3,21 @@ from collections.abc import Callable
 from datetime import datetime, timezone
 from typing import Any
 
+from openai import OpenAIError
 from pgvector.vector import Vector
 
 from .config import ALL_DEPARTMENTS, ALL_JURISDICTIONS, RagSettings
 from .embeddings import EmbeddingProvider, OpenAIEmbeddingProvider
+from .evidence import EvidenceValidator, LLMEvidenceValidator
 from .models import (
+    EvidenceAssessment,
     KnowledgeSearchRequest,
     KnowledgeSearchResponse,
     KnowledgeSource,
     PolicyConflict,
 )
 from .repository import ConnectionFactory, rag_connect
+from .rerankers import BGEM3ColbertReranker, Reranker
 
 
 class HybridRetriever:
@@ -21,6 +25,8 @@ class HybridRetriever:
         self,
         connection_factory: ConnectionFactory = rag_connect,
         embedding_provider: EmbeddingProvider | None = None,
+        reranker: Reranker | None = None,
+        evidence_validator: EvidenceValidator | None = None,
         settings: RagSettings | None = None,
         clock: Callable[[], datetime] | None = None,
     ) -> None:
@@ -30,6 +36,15 @@ class HybridRetriever:
         self.embedding_provider = embedding_provider or OpenAIEmbeddingProvider(
             self.settings
         )
+        self.reranker = reranker
+        if self.reranker is None and self.settings.reranker_enabled:
+            self.reranker = BGEM3ColbertReranker(self.settings)
+        self.evidence_validator = evidence_validator
+        if (
+            self.evidence_validator is None
+            and self.settings.evidence_validation_enabled
+        ):
+            self.evidence_validator = LLMEvidenceValidator(self.settings)
         self.clock = clock or (lambda: datetime.now(timezone.utc))
 
     @staticmethod
@@ -189,6 +204,47 @@ class HybridRetriever:
         )
 
     @staticmethod
+    def _rank_key(row: dict[str, Any]) -> tuple[Any, ...]:
+        colbert_score = row.get("colbert_score")
+        return (
+            colbert_score is None,
+            -float(colbert_score) if colbert_score is not None else 0.0,
+            -row["rrf_score"],
+            -int(row["product_specific"]),
+            row["authority_tier"],
+            -row["valid_from"].timestamp(),
+            row["document_id"],
+        )
+
+    def _rerank(
+        self,
+        query: str,
+        rows: list[dict[str, Any]],
+        parents: dict[int, dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        if not rows or self.reranker is None:
+            return rows
+        rerankable = [row for row in rows if row["parent_chunk_id"] in parents]
+        passages = [parents[row["parent_chunk_id"]]["chunk_text"] for row in rerankable]
+        scores = self.reranker.score(query, passages)
+        if len(scores) != len(rerankable):
+            raise ValueError("ColBERT 점수 수와 검색 후보 수가 다릅니다.")
+
+        score_by_parent = {
+            row["parent_chunk_id"]: score
+            for row, score in zip(rerankable, scores, strict=True)
+        }
+        ranked = []
+        for row in rows:
+            ranked.append(
+                {
+                    **row,
+                    "colbert_score": score_by_parent.get(row["parent_chunk_id"]),
+                }
+            )
+        return sorted(ranked, key=self._rank_key)
+
+    @staticmethod
     def _resolve_policy_priority(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
         ungrouped = []
@@ -218,7 +274,7 @@ class HybridRetriever:
                 )
                 == best_priority
             )
-        return sorted(resolved, key=lambda row: (-row["rrf_score"], row["document_id"]))
+        return sorted(resolved, key=HybridRetriever._rank_key)
 
     @staticmethod
     def _load_parents(conn, rows: list[dict[str, Any]]) -> dict[int, dict[str, Any]]:
@@ -275,6 +331,47 @@ class HybridRetriever:
                 )
         return conflicts
 
+    @staticmethod
+    def _apply_evidence_assessment(
+        sources: list[KnowledgeSource], assessment: EvidenceAssessment
+    ) -> tuple[
+        str, list[KnowledgeSource], list[PolicyConflict], EvidenceAssessment
+    ]:
+        if assessment.status == "sufficient":
+            supported_parent_ids = set(assessment.supported_parent_chunk_ids)
+            supported_sources = [
+                source
+                for source in sources
+                if source.parent_chunk_id in supported_parent_ids
+            ]
+            if supported_sources:
+                return "ok", supported_sources, [], assessment
+            assessment = assessment.model_copy(
+                update={
+                    "status": "insufficient",
+                    "reason": "근거 판정 결과에 사용 가능한 Parent 청크가 없습니다.",
+                    "missing_information": [
+                        "질문을 직접 뒷받침하는 승인 정책 Parent 청크"
+                    ],
+                }
+            )
+            return "no_evidence", [], [], assessment
+
+        if assessment.status == "conflict":
+            conflict_ids = assessment.supported_source_ids or [
+                source.source_id for source in sources
+            ]
+            conflicts = [
+                PolicyConflict(
+                    rule_key="semantic_evidence_conflict",
+                    reason=assessment.reason,
+                    source_ids=sorted(set(conflict_ids)),
+                )
+            ]
+            return "policy_conflict", sources, conflicts, assessment
+
+        return "no_evidence", [], [], assessment
+
     def search(
         self, request: KnowledgeSearchRequest | dict[str, Any]
     ) -> KnowledgeSearchResponse:
@@ -293,10 +390,12 @@ class HybridRetriever:
             vector_rows = self._vector_candidates(
                 conn, request, effective_at, query_embedding
             )
-            fused = self._resolve_policy_priority(self._fuse(fts_rows, vector_rows))
+            fused = self._fuse(fts_rows, vector_rows)
+            parents = self._load_parents(conn, fused)
+            fused = self._rerank(request.query, fused, parents)
+            fused = self._resolve_policy_priority(fused)
             conflicts = self._conflicts(fused)
             fused = fused[: request.limit]
-            parents = self._load_parents(conn, fused)
 
         sources = []
         for row in fused:
@@ -330,16 +429,53 @@ class HybridRetriever:
                     fts_rank=row["fts_rank"],
                     vector_rank=row["vector_rank"],
                     rrf_score=row["rrf_score"],
+                    colbert_score=row.get("colbert_score"),
                     product_specific=row["product_specific"],
                 )
             )
 
+        validation_error = None
         if conflicts:
             status = "policy_conflict"
-        elif sources:
-            status = "ok"
-        else:
+            conflict_source_ids = {
+                source_id
+                for conflict in conflicts
+                for source_id in conflict.source_ids
+            }
+            assessment = EvidenceAssessment(
+                status="conflict",
+                reason="동일 우선순위의 정책 결론이 서로 충돌합니다.",
+                supported_source_ids=sorted(conflict_source_ids),
+                supported_parent_chunk_ids=[
+                    source.parent_chunk_id
+                    for source in sources
+                    if source.source_id in conflict_source_ids
+                ],
+            )
+        elif not sources:
             status = "no_evidence"
+            assessment = EvidenceAssessment(
+                status="insufficient",
+                reason="검색 조건을 충족하는 승인 정책 근거가 없습니다.",
+                missing_information=["질문에 직접 답할 수 있는 승인 정책 근거"],
+            )
+        elif self.evidence_validator is None:
+            status = "ok"
+            assessment = None
+        else:
+            try:
+                assessment = self.evidence_validator.assess(request.query, sources)
+            except (OpenAIError, RuntimeError, TimeoutError, ValueError) as exc:
+                validation_error = type(exc).__name__
+                assessment = EvidenceAssessment(
+                    status="insufficient",
+                    reason="근거 유효성 판정기를 사용할 수 없어 안전하게 답변을 보류합니다.",
+                    missing_information=["근거 유효성 판정 재시도 또는 담당자 확인"],
+                )
+
+            status, sources, conflicts, assessment = self._apply_evidence_assessment(
+                sources, assessment
+            )
 
         return KnowledgeSearchResponse(
             status=status,
@@ -347,11 +483,30 @@ class HybridRetriever:
             effective_at=effective_at,
             sources=sources,
             conflicts=conflicts,
+            evidence_assessment=assessment,
             retrieval={
                 "sparse": "postgresql_fts_ts_rank_cd",
                 "dense": self.settings.embedding_model,
                 "fusion": "rrf",
                 "rrf_k": self.settings.rrf_k,
+                "reranker": (
+                    {
+                        "model": self.settings.reranker_model,
+                        "mode": "multi_vector_colbert",
+                        "device": self.settings.reranker_device,
+                    }
+                    if self.reranker is not None
+                    else None
+                ),
+                "evidence_validation": {
+                    "enabled": self.evidence_validator is not None,
+                    "model": (
+                        self.settings.evidence_model
+                        if self.evidence_validator is not None
+                        else None
+                    ),
+                    "error": validation_error,
+                },
                 "minimum_relevance": {
                     "metric": "cosine_similarity",
                     "threshold": self.settings.minimum_relevance_similarity,

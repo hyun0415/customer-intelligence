@@ -8,7 +8,7 @@ from src.database import connect
 from src.rag.chunker import ParentChildChunker
 from src.rag.config import ALL_DEPARTMENTS, ALL_JURISDICTIONS
 from src.rag.ingestion import RagIngestionService
-from src.rag.models import KnowledgeSearchRequest, PolicyMetadata
+from src.rag.models import EvidenceAssessment, KnowledgeSearchRequest, PolicyMetadata
 from src.rag.repository import RagRepository
 from src.rag.retriever import HybridRetriever
 
@@ -29,6 +29,21 @@ class FakeEmbeddings:
 
     def embed_query(self, text):
         return [1.0] + [0.0] * 1535
+
+
+class FakeReranker:
+    def score(self, query, passages):
+        return [1.0 for _ in passages]
+
+
+class AlwaysSufficientValidator:
+    def assess(self, query, sources):
+        return EvidenceAssessment(
+            status="sufficient",
+            reason="테스트 정책이 질문을 직접 뒷받침합니다.",
+            supported_source_ids=[source.source_id for source in sources],
+            supported_parent_chunk_ids=[source.parent_chunk_id for source in sources],
+        )
 
 
 class BorrowedConnection:
@@ -106,6 +121,8 @@ def test_schema_ingestion_and_hybrid_retrieval_round_trip(tmp_path):
         response = HybridRetriever(
             connection_factory=factory,
             embedding_provider=FakeEmbeddings(),
+            reranker=FakeReranker(),
+            evidence_validator=AlwaysSufficientValidator(),
             clock=lambda: datetime(2026, 9, 1, tzinfo=timezone.utc),
         ).search(
             KnowledgeSearchRequest(

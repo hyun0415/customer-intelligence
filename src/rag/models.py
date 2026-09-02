@@ -113,6 +113,7 @@ class KnowledgeSource(BaseModel):
     fts_rank: int | None = None
     vector_rank: int | None = None
     rrf_score: float
+    colbert_score: float | None = None
     product_specific: bool = False
 
 
@@ -122,12 +123,21 @@ class PolicyConflict(BaseModel):
     source_ids: list[str]
 
 
+class EvidenceAssessment(BaseModel):
+    status: Literal["sufficient", "insufficient", "conflict"]
+    reason: str = Field(min_length=1)
+    supported_source_ids: list[str] = Field(default_factory=list)
+    supported_parent_chunk_ids: list[int] = Field(default_factory=list)
+    missing_information: list[str] = Field(default_factory=list)
+
+
 class KnowledgeSearchResponse(BaseModel):
     status: Literal["ok", "no_evidence", "policy_conflict"]
     query: str
     effective_at: datetime
     sources: list[KnowledgeSource] = Field(default_factory=list)
     conflicts: list[PolicyConflict] = Field(default_factory=list)
+    evidence_assessment: EvidenceAssessment | None = None
     retrieval: dict[str, Any] = Field(default_factory=dict)
 
 
