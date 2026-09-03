@@ -1,22 +1,17 @@
-import os
-
 from dotenv import load_dotenv
 from langchain.agents import create_agent
 from langchain_core.messages import AIMessage, ToolMessage
-from langchain_openai import ChatOpenAI
+from src.model_clients import build_chat_model
+from src.model_config import ModelRole, ModelRoutingSettings
 from src.prompts import SYSTEM_PROMPT
 from src.tools import AGENT_TOOLS
 
 load_dotenv()
 
 
-model = ChatOpenAI(
-    model=os.getenv("OPENAI_MODEL", "gpt-5.6-terra"),
-    reasoning_effort="low",
-    use_responses_api=True,
-    timeout=float(os.getenv("OPENAI_TIMEOUT_SECONDS", "90")),
-    max_retries=int(os.getenv("OPENAI_MAX_RETRIES", "2")),
-)
+model_settings = ModelRoutingSettings.from_env()
+
+model = build_chat_model(ModelRole.AGENT, settings=model_settings)
 
 agent = create_agent(
     model=model,

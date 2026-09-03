@@ -1,6 +1,8 @@
 import os
 from dataclasses import dataclass, field
 
+from src.model_config import ModelRoutingSettings
+
 ALL_JURISDICTIONS = "ALL_JURISDICTIONS"
 ALL_DEPARTMENTS = "ALL_DEPARTMENTS"
 DEFAULT_COLLECTIONS = (
@@ -83,9 +85,7 @@ class RagSettings:
         default_factory=lambda: _env_bool("RAG_EVIDENCE_VALIDATION_ENABLED", True)
     )
     evidence_model: str = field(
-        default_factory=lambda: os.getenv(
-            "RAG_EVIDENCE_MODEL", os.getenv("OPENAI_MODEL", "gpt-5.6-terra")
-        )
+        default_factory=lambda: ModelRoutingSettings.from_env().evidence_model
     )
     evidence_timeout_seconds: float = field(
         default_factory=lambda: float(

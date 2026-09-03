@@ -2,7 +2,9 @@ import json
 from typing import Protocol
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
+
+from src.model_clients import build_structured_model
+from src.model_config import ModelRole, ModelRoutingSettings
 
 from .config import RagSettings
 from .models import EvidenceAssessment, KnowledgeSource
@@ -36,14 +38,15 @@ class LLMEvidenceValidator:
     def __init__(self, settings: RagSettings | None = None) -> None:
         self.settings = settings or RagSettings()
         self.settings.validate()
-        model = ChatOpenAI(
-            model=self.settings.evidence_model,
-            reasoning_effort="low",
-            use_responses_api=True,
-            timeout=self.settings.evidence_timeout_seconds,
-            max_retries=self.settings.evidence_max_retries,
+        routing = ModelRoutingSettings.from_env()
+        self.client = build_structured_model(
+            ModelRole.EVIDENCE,
+            EvidenceAssessment,
+            settings=routing,
+            model_override=self.settings.evidence_model,
+            timeout_override=self.settings.evidence_timeout_seconds,
+            max_retries_override=self.settings.evidence_max_retries,
         )
-        self.client = model.with_structured_output(EvidenceAssessment)
 
     def assess(
         self, query: str, sources: list[KnowledgeSource]

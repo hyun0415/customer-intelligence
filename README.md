@@ -159,6 +159,9 @@ python -m eval.run_judge <evaluation-json-path>
 6. Docker 기반 실행·배포 절차 정리
 7. 환경변수, 초기 데이터 적재, API 실행 방법 문서화
 
+로컬 Qwen/Gemma 모델과 OpenAI API 전환 구조 및 Web 완성 후 GPU 검증 항목은
+[`docs/local_model_runtime.md`](docs/local_model_runtime.md)에 정리되어 있습니다.
+
 ## 참고
 
 현재 README는 프로젝트의 문제 정의, 분석 구조, 평가 결과를 중심으로 작성했습니다. 환경변수 예시와 전체 실행 절차는 API 및 배포 구조가 확정된 뒤 추가할 예정입니다.
@@ -197,6 +200,16 @@ ColBERT 재정렬 의존성은 별도로 설치합니다. 최초 실행 시 BGE-
 
 주요 설정은 `RAG_RERANKER_MODEL`, `RAG_RERANKER_DEVICE`,
 `RAG_RERANKER_BATCH_SIZE`, `RAG_EVIDENCE_MODEL` 환경변수로 변경할 수 있습니다.
+
+OpenAI API 모델은 역할별로 독립 설정합니다. 환경변수를 생략하면 아래 기본값을
+사용합니다.
+
+```env
+OPENAI_MODEL=gpt-5.6-terra
+REVIEW_EXTRACTOR_MODEL=gpt-5.6-luna
+RAG_EVIDENCE_MODEL=gpt-5.6-luna
+EVALUATOR_MODEL=gpt-5.6-sol
+```
 고정 평가 결과에 따라 채널별 후보 기본값은 10개입니다. reranker 실패 시 기본적으로
 RRF 순서로 복귀하며(`RAG_RERANKER_FALLBACK_TO_RRF=true`), LLM 근거 판정 실패는
 기존처럼 `no_evidence`로 안전하게 종료합니다. 근거 판정 timeout/retry 기본값은

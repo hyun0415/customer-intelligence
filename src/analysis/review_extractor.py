@@ -1,9 +1,7 @@
-import os
 from functools import lru_cache
 
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
 
 from src.analysis.schemas import (
     ClassifiedReview,
@@ -17,6 +15,8 @@ from src.cache.review_cache import (
 )
 
 from src.analysis.taxonomy import REVIEW_TOPICS
+from src.model_clients import build_structured_model
+from src.model_config import ModelRole, ModelRoutingSettings
 
 
 load_dotenv()
@@ -126,25 +126,9 @@ def get_extractor_model():
     구조화 출력을 반환하는 Review Extractor 모델을 생성한다
     캐시를 사용해 호출할 때마다 모델 객체를 다시 만들지 않는다.
     """
-    model = ChatOpenAI(
-        model=os.getenv(
-            "REVIEW_EXTRACTOR_MODEL",
-            os.getenv(
-                "OPENAI_MODEL",
-                "gpt-5.6-terra",
-            ),
-        ),
-        reasoning_effort=os.getenv(
-            "REVIEW_EXTRACTOR_REASONING_EFFORT",
-            "low",
-        ),
-        use_responses_api=True,
-        timeout=60,
-        max_retries=1,
-    )
-
-    return model.with_structured_output(
-        ClassifiedReview
+    return build_structured_model(
+        ModelRole.ASPECT_EXTRACTOR,
+        ClassifiedReview,
     )
 
 
@@ -222,18 +206,11 @@ def extract_review_topics(
             summary="분석할 리뷰 내용이 없습니다.",
         )
 
-    extractor_model = os.getenv(
-        "REVIEW_EXTRACTOR_MODEL",
-        os.getenv("OPENAI_MODEL", "gpt-5.6-terra"),
-    )
-    reasoning_effort = os.getenv(
-        "REVIEW_EXTRACTOR_REASONING_EFFORT",
-        "low",
-    )
+    extractor_settings = ModelRoutingSettings.from_env().aspect_extractor
+    extractor_model = extractor_settings.cache_identity
 
     extractor_version = (
         f"{extractor_model}:"
-        f"{reasoning_effort}:"
         f"{EXTRACTOR_CACHE_VERSION}"
     )
 

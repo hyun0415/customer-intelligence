@@ -1,9 +1,10 @@
-import os
-
 from dotenv import load_dotenv
-from openai import OpenAI
+from langchain_core.messages import HumanMessage, SystemMessage
 
 from eval.prompts.judge_prompt import build_judge_prompt
+from eval.prompts.evaluator_prompt import EVALUATOR_SYSTEM_PROMPT
+from src.model_clients import build_chat_model
+from src.model_config import DEFAULT_EVALUATOR_MODEL, ModelRole, ModelRoutingSettings
 
 from .schemas import JudgeResult, RuleCheckResult
 
@@ -11,21 +12,22 @@ from .schemas import JudgeResult, RuleCheckResult
 load_dotenv()
 
 
-DEFAULT_MODEL = "gpt-5.6-sol"
+DEFAULT_MODEL = DEFAULT_EVALUATOR_MODEL
 
 
 class LLMJudge:
     def __init__(
         self,
         model: str | None = None,
-        client: OpenAI | None = None,
+        client=None,
     ):
-        self.model = (
-            model
-            or os.getenv("EVALUATOR_MODEL")
-            or DEFAULT_MODEL
+        settings = ModelRoutingSettings.from_env()
+        self.model = model or settings.evaluator_model
+        self.client = client or build_chat_model(
+            ModelRole.EVALUATOR,
+            settings=settings,
+            model_override=model,
         )
-        self.client = client or OpenAI()
 
     def evaluate(
         self,
@@ -37,31 +39,17 @@ class LLMJudge:
             rule_result=rule_result.model_dump(),
         )
 
-        response = self.client.responses.parse(
-            model=self.model,
-            input=[
-                {
-                    "role": "system",
-                    "content": (
-                        "당신은 Customer Intelligence Agent의 "
-                        "엄격한 품질 평가자다. "
-                        "Python 규칙 검사와 Tool 원본 출력을 "
-                        "함께 검토하라."
-                    ),
-                },
-                {
-                    "role": "user",
-                    "content": prompt,
-                },
-            ],
-            text_format=JudgeResult,
+        structured_client = self.client.with_structured_output(
+            JudgeResult,
+            method="json_schema",
+            strict=True,
         )
-
-        result = response.output_parsed
-
-        if result is None:
-            raise ValueError(
-                "평가 모델이 구조화된 결과를 반환하지 않았습니다."
-            )
-
+        result = structured_client.invoke(
+            [
+                SystemMessage(content=EVALUATOR_SYSTEM_PROMPT),
+                HumanMessage(content=prompt),
+            ]
+        )
+        if not isinstance(result, JudgeResult):
+            result = JudgeResult.model_validate(result)
         return result
