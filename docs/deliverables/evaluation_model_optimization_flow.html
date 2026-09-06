@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>평가 자동화와 모델 최적화</title>
+  <style>
+    :root{--ink:#17231f;--muted:#64716b;--line:#d8e3de;--green:#27664f;--green-bg:#edf7f2;--blue:#2e6f9f;--blue-bg:#edf6fc;--violet:#6b4bb2;--violet-bg:#f1ecfb;--amber:#a56216;--amber-bg:#fff5e6;--gray:#8b9892;--gray-bg:#f7f9f8}
+    *{box-sizing:border-box}body{margin:0;background:#eef3f0;font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:var(--ink)}
+    .slide{position:relative;width:1280px;height:720px;margin:24px auto;background:#fff;overflow:hidden;padding:34px 52px;box-shadow:0 16px 40px rgba(29,55,45,.10)}
+    .eyebrow{margin:0;color:var(--green);font-size:15px;font-weight:800;letter-spacing:.08em}.title{margin:13px 0 0;font-size:42px;line-height:1.15;letter-spacing:-.04em}.subtitle{margin:9px 0 0;color:var(--muted);font-size:17px}
+    .flow{position:absolute;left:48px;top:165px;width:1184px;height:455px}.phase{position:absolute;top:0;height:28px;color:var(--muted);font-size:12px;font-weight:850;letter-spacing:.05em;border-bottom:2px solid var(--line)}.p1{left:0;width:152px}.p2{left:180px;width:420px}.p3{left:630px;width:160px}.p4{left:820px;width:210px}.p5{left:1060px;width:124px}
+    .node{position:absolute;border:1.5px solid var(--line);border-radius:15px;background:#fff}.label{font-size:10px;color:var(--muted);font-weight:900;letter-spacing:.06em}.name{margin-top:7px;font-size:16px;font-weight:850;line-height:1.27}.detail{margin-top:6px;color:var(--muted);font-size:12px;line-height:1.4}.icon{width:34px;height:34px;padding:6px;border-radius:10px;background:#fff;display:block;margin-bottom:12px}.icon svg{width:100%;height:100%;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+    .cases{left:0;top:108px;width:152px;height:205px;padding:18px;background:var(--gray-bg);color:#68756f}.tags{display:flex;gap:5px;flex-wrap:wrap;margin-top:15px}.tag{padding:4px 7px;border:1px solid var(--line);border-radius:9px;background:#fff;color:var(--muted);font-size:10px;font-weight:750}
+    .model-zone{position:absolute;left:180px;top:87px;width:420px;height:245px;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}.model{top:45px;width:126px;height:155px;padding:15px 12px}.sol{left:0;background:var(--blue-bg);border-color:var(--blue)}.api{left:147px;background:var(--green-bg);border:2.5px solid var(--green)}.local{left:294px;background:var(--violet-bg);border:1.5px dashed var(--violet)}.model .name{font-size:15px}.model .detail{font-size:11.5px}.badge{display:inline-block;margin-top:11px;padding:4px 8px;border:1px solid currentColor;border-radius:9px;background:#fff;font-size:9.5px;font-weight:850}.sol{color:var(--blue)}.api{color:var(--green)}.local{color:var(--violet)}
+    .trace{left:630px;top:123px;width:160px;height:175px;padding:18px 15px;background:#f8fbfa;color:var(--green)}.trace-list{margin-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:7px}.trace-list i{font-style:normal;padding:5px 4px;border-radius:7px;background:#fff;border:1px solid var(--line);color:var(--muted);font-size:10px;text-align:center;font-weight:750}
+    .eval{left:820px;width:210px;height:72px;padding:12px 12px 10px 49px}.eval .mini{position:absolute;left:13px;top:16px;width:25px;height:25px;color:inherit}.eval .mini svg{width:100%;height:100%;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.eval .name{font-size:14px;margin-top:5px}.eval .detail{font-size:10.5px;margin-top:3px}.rule{top:72px;background:var(--blue-bg);border-color:var(--blue);color:var(--blue)}.rag{top:159px;background:var(--green-bg);border-color:var(--green);color:var(--green)}.judge{top:246px;background:var(--violet-bg);border-color:var(--violet);color:var(--violet)}
+    .score{left:1060px;top:102px;width:124px;height:206px;padding:15px 12px;background:#fff;border:2px solid var(--green);color:var(--green)}.score .name{font-size:15px}.score-row{margin-top:10px;padding:7px 6px;border-radius:8px;background:var(--gray-bg);color:var(--ink);font-size:10.5px;font-weight:750}.score-row:before{content:"";display:inline-block;width:7px;height:7px;margin-right:6px;border-radius:50%;background:var(--green)}.score-row.warn:before{background:var(--amber)}.score-row.diff:before{background:var(--violet)}.score-note{margin-top:11px;color:var(--muted);font-size:10px;line-height:1.35}
+    .feedback{position:absolute;left:300px;top:374px;width:884px;height:45px;border:1.5px dashed var(--amber);border-radius:14px;background:var(--amber-bg);color:var(--amber);padding:12px 16px;font-size:12px;font-weight:800}.feedback strong{font-size:13px;margin-right:16px}.feedback .return{float:right;color:#765023}
+    .line{position:absolute;background:var(--gray)}.h{height:2px}.v{width:2px}.arrow:after{content:"";position:absolute;right:-1px;top:-4px;border-left:8px solid var(--gray);border-top:5px solid transparent;border-bottom:5px solid transparent}.arrow-down:after{content:"";position:absolute;left:-4px;bottom:-1px;border-top:8px solid var(--gray);border-left:5px solid transparent;border-right:5px solid transparent}
+    .callout{position:absolute;left:48px;right:48px;bottom:27px;height:39px;border-top:1px solid var(--line);padding-top:13px;color:#46564f;font-size:13.5px;font-weight:750}.callout strong{color:var(--green)}
+  </style>
+</head>
+<body>
+<svg width="0" height="0"><defs>
+  <symbol id="set" viewBox="0 0 24 24"><path d="M7 4h10v3H7zM5 6h14v15H5z"/><path d="m8 12 2 2 4-4M8 18h8"/></symbol>
+  <symbol id="model" viewBox="0 0 24 24"><circle cx="7" cy="7" r="2"/><circle cx="17" cy="7" r="2"/><circle cx="12" cy="17" r="2"/><path d="M9 7h6M8.2 8.5l2.8 6.7M15.8 8.5 13 15.2"/></symbol>
+  <symbol id="trace" viewBox="0 0 24 24"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"/></symbol>
+  <symbol id="check" viewBox="0 0 24 24"><path d="M12 3 4 6v6c0 5 3.4 8 8 9 4.6-1 8-4 8-9V6z"/><path d="m8.5 12 2.2 2.2 4.8-5"/></symbol>
+  <symbol id="search" viewBox="0 0 24 24"><circle cx="10" cy="10" r="6"/><path d="m14.5 14.5 5 5M7 10h6"/></symbol>
+  <symbol id="judge" viewBox="0 0 24 24"><path d="M12 4v16M6 7h12M7 7l-3 6h6zM17 7l-3 6h6zM8 20h8"/></symbol>
+</defs></svg>
+<main class="slide">
+  <p class="eyebrow">CUSTOMER INTELLIGENCE</p><h1 class="title">평가 자동화와 모델 최적화</h1>
+  <p class="subtitle">고성능 모델로 설계를 검증한 뒤, 같은 평가 기준으로 운영 모델과 로컬 후보를 비교합니다.</p>
+  <section class="flow">
+    <div class="phase p1">01&nbsp;&nbsp;평가 입력</div><div class="phase p2">02&nbsp;&nbsp;모델 전환 과정</div><div class="phase p3">03&nbsp;&nbsp;결과 수집</div><div class="phase p4">04&nbsp;&nbsp;공통 평가 체계</div><div class="phase p5">05&nbsp;&nbsp;비교</div>
+    <article class="node cases"><span class="icon"><svg><use href="#set"/></svg></span><div class="label">FIXED EVAL SET</div><div class="name">같은 질문과 기대 결과</div><div class="detail">모델이 바뀌어도 동일한 기준으로 비교</div><div class="tags"><span class="tag">리뷰 분석</span><span class="tag">정책 RAG</span><span class="tag">안전</span></div></article>
+    <div class="model-zone">
+      <article class="node model sol"><div class="label">STEP 1</div><div class="name">Sol 타당성 검증</div><div class="detail">설계 검증<br/>품질 상한 확인</div><span class="badge">초기 Reference</span></article>
+      <article class="node model api"><div class="label">STEP 2</div><div class="name">Luna·Terra</div><div class="detail">Luna: 추출·근거<br/>Terra: 최종 Agent</div><span class="badge">API 운영 기준</span></article>
+      <article class="node model local"><div class="label">STEP 3</div><div class="name">Qwen·Gemma</div><div class="detail">로컬 전환 후보<br/>향후 GPU 검증</div><span class="badge">검토 중</span></article>
+      <span class="line h arrow" style="left:126px;top:122px;width:21px"></span><span class="line h arrow" style="left:273px;top:122px;width:21px"></span>
+    </div>
+    <article class="node trace"><span class="icon"><svg><use href="#trace"/></svg></span><div class="label">EXECUTION TRACE</div><div class="name">실행 결과 수집</div><div class="trace-list"><i>Tool Call</i><i>SQL 수치</i><i>RAG 근거</i><i>최종 답변</i></div></article>
+    <article class="node eval rule"><span class="mini"><svg><use href="#check"/></svg></span><div class="label">DETERMINISTIC</div><div class="name">Tool·Rule 평가</div><div class="detail">선택·인자·수치·금지 규칙</div></article>
+    <article class="node eval rag"><span class="mini"><svg><use href="#search"/></svg></span><div class="label">STAGE COMPARISON</div><div class="name">RAG 단계 평가</div><div class="detail">검색·재정렬·근거 판정</div></article>
+    <article class="node eval judge"><span class="mini"><svg><use href="#judge"/></svg></span><div class="label">LLM JUDGE</div><div class="name">Sol 정성 평가</div><div class="detail">근거성·분석·업무 활용성</div></article>
+    <article class="node score"><div class="label">SCORECARD</div><div class="name">비교 결과표</div><div class="score-row">통과 항목</div><div class="score-row warn">실패 위치</div><div class="score-row diff">품질 차이</div><div class="score-note">총점보다 실패 원인과 모델 간 차이를 기록</div></article>
+    <span class="line h arrow" style="left:152px;top:210px;width:28px"></span><span class="line h arrow" style="left:600px;top:210px;width:30px"></span>
+    <span class="line h" style="left:790px;top:210px;width:15px"></span><span class="line v" style="left:805px;top:108px;height:174px"></span><span class="line h arrow" style="left:805px;top:108px;width:15px"></span><span class="line h arrow" style="left:805px;top:195px;width:15px"></span><span class="line h arrow" style="left:805px;top:282px;width:15px"></span>
+    <span class="line h" style="left:1030px;top:108px;width:15px"></span><span class="line h" style="left:1030px;top:195px;width:15px"></span><span class="line h" style="left:1030px;top:282px;width:15px"></span><span class="line v" style="left:1045px;top:108px;height:174px"></span><span class="line h arrow" style="left:1045px;top:195px;width:15px"></span>
+    <div class="feedback"><strong>평가 결과 기반 개선</strong>Prompt · 역할별 모델 · 검색 설정 · 평가 케이스 보완 <span class="return">운영 기준으로 재평가 ↩</span></div>
+  </section>
+  <div class="callout"><strong>핵심:</strong> Sol은 초기 설계 검증에 사용하고, Luna·Terra를 API 운영 기준으로 최적화한 뒤 Qwen·Gemma의 로컬 전환 가능성을 같은 평가 체계로 확인합니다.</div>
+</main>
+</body></html>

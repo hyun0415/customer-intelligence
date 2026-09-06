@@ -1,0 +1,13 @@
+.git
+.venv
+.pytest_cache
+.pytest-tmp*
+.ruff_cache
+__pycache__
+*.pyc
+.env
+data
+eval/results
+notebook
+frontend/node_modules
+frontend/.next

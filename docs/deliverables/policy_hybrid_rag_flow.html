@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>정책 Hybrid RAG 검색과 근거 판정</title>
+  <style>
+    :root{--ink:#17231f;--muted:#64716b;--line:#d8e3de;--green:#27664f;--green-bg:#edf7f2;--blue:#2e6f9f;--blue-bg:#edf6fc;--violet:#6b4bb2;--violet-bg:#f1ecfb;--amber:#a56216;--amber-bg:#fff5e6;--rose:#a13c4a;--rose-bg:#fff0f2;--gray-bg:#f7f9f8}
+    *{box-sizing:border-box} body{margin:0;background:#eef3f0;font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:var(--ink)}
+    .slide{position:relative;width:1280px;height:720px;margin:24px auto;background:#fff;overflow:hidden;padding:34px 52px;box-shadow:0 16px 40px rgba(29,55,45,.10)}
+    .eyebrow{margin:0;color:var(--green);font-size:15px;font-weight:800;letter-spacing:.08em}.title{margin:13px 0 0;font-size:42px;line-height:1.15;letter-spacing:-.04em}.subtitle{margin:9px 0 0;color:var(--muted);font-size:17px}
+    .flow{position:absolute;left:48px;top:158px;width:1184px;height:470px}
+    .phase{position:absolute;top:0;height:28px;color:var(--muted);font-size:12px;font-weight:800;letter-spacing:.06em;border-bottom:2px solid var(--line)}
+    .p1{left:0;width:365px}.p2{left:400px;width:555px}.p3{left:980px;width:204px}
+    .node{position:absolute;border:1.5px solid var(--line);border-radius:16px;background:#fff;padding:15px 14px 13px 52px;min-height:88px}
+    .node .icon{position:absolute;left:14px;top:17px;width:27px;height:27px;padding:4px;border-radius:9px;background:#fff}.node svg{width:100%;height:100%;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+    .label{font-size:10px;color:var(--muted);font-weight:900;letter-spacing:.06em}.name{margin-top:7px;font-size:17px;font-weight:850;line-height:1.25;white-space:nowrap}.detail{margin-top:5px;color:var(--muted);font-size:12.5px;line-height:1.35}
+    .input{left:0;top:119px;width:150px;height:105px;background:var(--gray-bg);color:#68756f}.filter{left:180px;top:99px;width:190px;height:145px;background:#f2faf6;border-color:#5e8b78;color:var(--green)}
+    .fts{left:410px;top:50px;width:190px;height:103px;background:var(--blue-bg);border-color:var(--blue);color:var(--blue)}.embed{left:410px;top:206px;width:190px;height:103px;background:var(--violet-bg);border-color:var(--violet);color:var(--violet)}
+    .rrf{left:642px;top:115px;width:114px;height:114px;border-radius:57px;padding:29px 8px 8px;text-align:center;background:var(--green-bg);border:2px solid var(--green);color:var(--green)}.rrf .name{font-size:18px}.rrf .detail{font-size:11.5px}.rrf .icon{display:none}
+    .rerank{left:797px;top:83px;width:190px;height:177px;background:var(--violet-bg);border:2px solid var(--violet);color:var(--violet)}
+    .matrix{display:grid;grid-template-columns:repeat(5,13px);gap:3px;margin-top:10px}.matrix i{height:9px;border-radius:2px;background:#dfd5f4}.matrix i.hot{background:#7551bd}.matrix i.mid{background:#aa92d8}
+    .priority{left:1020px;top:55px;width:164px;height:84px;background:var(--blue-bg);border-color:var(--blue);color:var(--blue)}.gate{left:1020px;top:176px;width:164px;height:102px;background:#f6f1fb;border:2px solid var(--violet);color:var(--violet)}
+    .outcome{top:355px;width:132px;height:82px;padding:13px 10px;text-align:center;border-radius:13px}.outcome .name{font-size:15px}.outcome .detail{font-size:11.5px}.answer{left:620px;background:var(--green-bg);border-color:var(--green);color:var(--green)}.none{left:764px;background:var(--gray-bg);color:#68756f}.conflict{left:908px;background:var(--amber-bg);border-color:var(--amber);color:var(--amber)}.safety{left:1052px;background:var(--rose-bg);border-color:var(--rose);color:var(--rose)}
+    .line{position:absolute;background:#8b9992}.h{height:2px}.v{width:2px}.arrow:after{content:"";position:absolute;right:-1px;top:-4px;border-left:8px solid #8b9992;border-top:5px solid transparent;border-bottom:5px solid transparent}.arrow-down:after{content:"";position:absolute;left:-4px;bottom:-1px;border-top:8px solid #8b9992;border-left:5px solid transparent;border-right:5px solid transparent}
+    .status-line{position:absolute;left:1088px;top:279px;width:2px;height:37px;background:var(--green)}.status-rail{position:absolute;left:686px;top:316px;width:403px;height:2px;background:var(--green)}.drop{position:absolute;top:316px;width:2px;height:39px;background:var(--green)}
+    .callout{position:absolute;left:48px;right:48px;bottom:27px;height:39px;border-top:1px solid var(--line);padding-top:13px;color:#46564f;font-size:13.5px;font-weight:750}.callout strong{color:var(--green)}
+    .badge{display:inline-block;margin-top:7px;padding:3px 8px;border:1px solid currentColor;border-radius:10px;background:#fff;font-size:10px;font-weight:800}
+  </style>
+</head>
+<body>
+<svg width="0" height="0" aria-hidden="true"><defs>
+  <symbol id="q" viewBox="0 0 24 24"><path d="M5 5h14v11H9l-4 4z"/><path d="M8 9h8M8 13h5"/></symbol>
+  <symbol id="shield" viewBox="0 0 24 24"><path d="M12 3 4 6v6c0 5 3.4 8 8 9 4.6-1 8-4 8-9V6z"/><path d="m8.5 12 2.2 2.2 4.8-5"/></symbol>
+  <symbol id="db" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="7" ry="3"/><path d="M5 5v7c0 1.7 3.1 3 7 3s7-1.3 7-3V5M5 12v7c0 1.7 3.1 3 7 3s7-1.3 7-3v-7"/></symbol>
+  <symbol id="vec" viewBox="0 0 24 24"><circle cx="6" cy="16" r="2"/><circle cx="12" cy="7" r="2"/><circle cx="18" cy="13" r="2"/><path d="m7.5 14.5 3.2-5.7M13.7 8.2l2.8 3.3"/></symbol>
+  <symbol id="ai" viewBox="0 0 24 24"><circle cx="7" cy="7" r="2"/><circle cx="17" cy="7" r="2"/><circle cx="12" cy="17" r="2"/><path d="M9 7h6M8.2 8.5l2.8 6.7M15.8 8.5 13 15.2"/></symbol>
+  <symbol id="sort" viewBox="0 0 24 24"><path d="M7 4v16M4 7l3-3 3 3M17 20V4M14 17l3 3 3-3"/></symbol>
+</defs></svg>
+<main class="slide">
+  <p class="eyebrow">CUSTOMER INTELLIGENCE</p>
+  <h1 class="title">정책 Hybrid RAG 검색과 근거 판정</h1>
+  <p class="subtitle">권한 범위 안에서 후보를 찾고, 재정렬과 근거 판정을 거쳐 응답 상태를 결정합니다.</p>
+  <section class="flow">
+    <div class="phase p1">01&nbsp;&nbsp;범위 제한</div><div class="phase p2">02&nbsp;&nbsp;후보 검색과 정밀 재정렬</div><div class="phase p3">03&nbsp;&nbsp;근거 판정과 응답</div>
+    <div class="node input"><span class="icon"><svg><use href="#q"/></svg></span><div class="label">INPUT</div><div class="name">정책 질문</div><div class="detail">질문과 사용자 권한</div></div>
+    <div class="node filter"><span class="icon"><svg><use href="#shield"/></svg></span><div class="label">SERVER FILTER</div><div class="name">정책 범위 필터</div><div class="detail">제품 범위·유효기간<br/>Collection·관할·부서</div><span class="badge">권한 강제</span></div>
+    <div class="node fts"><span class="icon"><svg><use href="#db"/></svg></span><div class="label">KEYWORD</div><div class="name">PostgreSQL FTS</div><div class="detail">정확한 용어와 조건 검색</div></div>
+    <div class="node embed"><span class="icon"><svg><use href="#vec"/></svg></span><div class="label">SEMANTIC</div><div class="name">Embedding 기반 검색</div><div class="detail">질문과 Child 의미 유사도</div></div>
+    <div class="node rrf"><div class="label">FUSION</div><div class="name">RRF</div><div class="detail">두 검색 순위 통합<br/>k = 60</div></div>
+    <div class="node rerank"><span class="icon"><svg><use href="#ai"/></svg></span><div class="label">RERANKER</div><div class="name">BGE-M3 재정렬</div><div class="detail">Multi-vector Late Interaction<br/>질문 토큰별 MaxSim</div><div class="matrix"><i class="hot"></i><i></i><i class="mid"></i><i></i><i></i><i></i><i class="hot"></i><i></i><i class="mid"></i><i></i><i class="mid"></i><i></i><i></i><i class="hot"></i><i></i></div></div>
+    <div class="node priority"><span class="icon"><svg><use href="#sort"/></svg></span><div class="label">POLICY RULE</div><div class="name">정책 우선순위</div><div class="detail">제품 범위·Authority·최신 버전</div></div>
+    <div class="node gate"><span class="icon"><svg><use href="#shield"/></svg></span><div class="label">LLM JUDGMENT</div><div class="name">근거 유효성 판정</div><div class="detail">sufficient · insufficient · conflict</div></div>
+    <div class="node outcome answer"><div class="label">SUFFICIENT</div><div class="name">근거 인용 답변</div><div class="detail">유효 정책과 출처</div></div>
+    <div class="node outcome none"><div class="label">INSUFFICIENT</div><div class="name">근거 부족</div><div class="detail">no_evidence</div></div>
+    <div class="node outcome conflict"><div class="label">CONFLICT</div><div class="name">정책 충돌</div><div class="detail">담당자 확인</div></div>
+    <div class="node outcome safety"><div class="label">MEDICAL · SAFETY</div><div class="name">즉시 Escalation</div><div class="detail">안전 담당자 연결</div></div>
+    <span class="line h arrow" style="left:150px;top:171px;width:30px"></span>
+    <span class="line h" style="left:370px;top:171px;width:20px"></span><span class="line v" style="left:390px;top:101px;height:157px"></span><span class="line h arrow" style="left:390px;top:101px;width:20px"></span><span class="line h arrow" style="left:390px;top:257px;width:20px"></span>
+    <span class="line h" style="left:600px;top:101px;width:22px"></span><span class="line v" style="left:622px;top:101px;height:156px"></span><span class="line h" style="left:600px;top:257px;width:22px"></span><span class="line h arrow" style="left:622px;top:171px;width:20px"></span>
+    <span class="line h arrow" style="left:756px;top:171px;width:41px"></span><span class="line h arrow" style="left:987px;top:171px;width:33px"></span><span class="line v arrow-down" style="left:1102px;top:139px;height:37px"></span>
+    <span class="status-line"></span><span class="status-rail"></span><span class="drop" style="left:686px"></span><span class="drop" style="left:830px"></span><span class="drop" style="left:974px"></span><span class="drop" style="left:1118px"></span>
+  </section>
+  <div class="callout"><strong>핵심 통제:</strong> 검색 점수만으로 답변하지 않고, 사용자 권한과 근거 유효성 판정을 통과한 정책만 Agent 답변에 사용합니다.</div>
+</main>
+</body>
+</html>

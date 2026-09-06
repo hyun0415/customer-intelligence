@@ -1,0 +1,6 @@
+services:
+  backend:
+    build:
+      target: runtime-reranker
+    environment:
+      RAG_RERANKER_ENABLED: "true"

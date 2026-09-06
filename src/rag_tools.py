@@ -3,6 +3,7 @@ from functools import lru_cache
 
 from langchain_core.tools import tool
 
+from src.auth.access import get_policy_access_grants
 from src.rag.models import KnowledgeSearchRequest
 from src.rag.retriever import HybridRetriever
 
@@ -38,5 +39,6 @@ def search_internal_knowledge_tool(
         jurisdiction=jurisdiction,
         effective_at=parsed_effective_at,
         limit=limit,
+        access_grants=get_policy_access_grants(),
     )
     return get_internal_knowledge_retriever().search(request).model_dump(mode="json")

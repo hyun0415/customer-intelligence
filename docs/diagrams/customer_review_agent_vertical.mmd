@@ -1,0 +1,44 @@
+flowchart TB
+    Q(["사용자 질문<br/>자연어 분석 요청"])
+
+    subgraph S1["① 검증된 데이터 조회"]
+        direction LR
+        LG["LangGraph Agent<br/>Tool 선택"] --> SQL["검증된 SQL Tool<br/>고정 Query·입력 검증"] --> PG[("PostgreSQL<br/>리뷰 표본·정량 통계")]
+    end
+
+    subgraph S2["② Aspect Term 추출"]
+        direction LR
+        EX["Aspect Extractor LLM<br/>불만 유형·감성 분류"] --> JSON["Aspect JSON<br/>Term·Sentiment·Evidence"]
+    end
+
+    subgraph S3["③ 원문 검증·Python 집계"]
+        direction LR
+        EV["원문 근거 검증<br/>없는 Evidence 제거"] --> PY["Python 집계<br/>중복 제거·빈도 계산"] --> CTX["Grounded Context<br/>Aspect·빈도·비율·근거"]
+    end
+
+    subgraph S4["④ 최종 Agent 답변"]
+        direction LR
+        FA["Final Agent LLM<br/>검증 결과 기반 해석"] --> OUT["업무 활용 답변<br/>반복 불만·개선 우선순위"]
+    end
+
+    Q --> LG
+    PG -->|"리뷰 표본·정량 통계"| EX
+    JSON --> EV
+    CTX -->|"검증된 분석 결과"| FA
+
+    SQL -. "LLM 직접 SQL 생성 없음" .-> G1["통제"]
+    EV -. "원문에 없는 Evidence 제거" .-> G2["통제"]
+
+    classDef llm fill:#F2EDFB,stroke:#6848A8,stroke-width:2px,color:#18231F;
+    classDef code fill:#EDF6FC,stroke:#2F6F9F,stroke-width:2px,color:#18231F;
+    classDef database fill:#EDF7F2,stroke:#34735B,stroke-width:2px,color:#18231F;
+    classDef data fill:#FFF4E8,stroke:#C96A1B,stroke-width:2px,color:#18231F;
+    classDef output fill:#EAF6EF,stroke:#24704E,stroke-width:2px,color:#18231F;
+    classDef guard fill:#FFF9E8,stroke:#B17A0B,stroke-dasharray:4 3,color:#6A4B06;
+
+    class LG,SQL,PY code;
+    class EX,FA llm;
+    class PG database;
+    class JSON,EV,CTX data;
+    class OUT output;
+    class G1,G2 guard;

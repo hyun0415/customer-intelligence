@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "정책 Hybrid RAG 검색과 근거 판정",
+    "subtitle": "권한 범위 안에서 후보를 찾고, 재정렬과 근거 판정을 거쳐 응답 상태를 결정합니다",
+    "animation": "none",
+    "visual_preset": "editorial",
+    "quality_profile": "showcase",
+    "viewBox": [1400, 880]
+  },
+  "lanes": [
+    { "id": "request", "label": "질문" },
+    { "id": "scope", "label": "정책 범위" },
+    { "id": "keyword", "label": "키워드 검색" },
+    { "id": "semantic", "label": "의미 검색" },
+    { "id": "precision", "label": "정밀 검증" },
+    { "id": "response", "label": "응답" },
+    { "id": "exceptions", "label": "예외 처리", "variant": "exception" }
+  ],
+  "phases": [
+    { "id": "range", "label": "범위 제한", "fromCol": 0, "toCol": 1, "variant": "security" },
+    { "id": "retrieval", "label": "후보 검색과 통합", "fromCol": 2, "toCol": 3 },
+    { "id": "judgment", "label": "재정렬과 근거 판정", "fromCol": 4, "toCol": 5, "variant": "emphasis" }
+  ],
+  "groups": [
+    { "id": "parallel_retrieval", "label": "병렬 검색", "lane": "keyword", "fromCol": 2, "toCol": 3, "variant": "dashed" },
+    { "id": "evidence_boundary", "label": "답변에 사용할 근거 결정", "lane": "precision", "fromCol": 4, "toCol": 5, "variant": "emphasis" }
+  ],
+  "mainPath": ["question", "scope_filter", "fts", "rrf", "rerank", "priority", "evidence_gate", "grounded_answer"],
+  "nodes": [
+    { "id": "question", "lane": "request", "col": 0, "type": "external", "label": "정책 질문", "sublabel": "질문 + 사용자 권한" },
+    { "id": "scope_filter", "lane": "scope", "col": 1, "type": "security", "label": "정책 범위 필터", "sublabel": "제품·기간·Collection·관할·부서", "tag": "서버 강제" },
+    { "id": "fts", "lane": "keyword", "col": 2, "type": "database", "label": "PostgreSQL FTS", "sublabel": "정확한 용어와 조건 검색" },
+    { "id": "embedding", "lane": "semantic", "col": 2, "type": "cloud", "label": "Embedding 기반 검색", "sublabel": "질문과 Child 의미 유사도" },
+    { "id": "rrf", "lane": "keyword", "col": 3, "type": "messagebus", "label": "RRF 후보 통합", "sublabel": "두 순위를 결합", "tag": "k = 60" },
+    { "id": "rerank", "lane": "precision", "col": 4, "type": "backend", "label": "BGE-M3 재정렬", "sublabel": "Multi-vector + MaxSim" },
+    { "id": "priority", "lane": "precision", "col": 5, "type": "backend", "label": "정책 우선순위", "sublabel": "제품 범위·Authority·최신 버전", "yOffset": -55 },
+    { "id": "evidence_gate", "lane": "precision", "col": 5, "type": "security", "label": "근거 유효성 판정", "sublabel": "충분·부족·충돌", "yOffset": 55 },
+    { "id": "grounded_answer", "lane": "response", "col": 5, "type": "backend", "label": "근거 인용 답변", "sublabel": "유효 정책과 출처 제시" },
+    { "id": "no_evidence", "lane": "exceptions", "col": 5, "type": "security", "label": "근거 부족", "sublabel": "no_evidence", "yOffset": -70 },
+    { "id": "conflict", "lane": "exceptions", "col": 5, "type": "security", "label": "정책 충돌", "sublabel": "담당자 확인", "yOffset": 0 },
+    { "id": "escalation", "lane": "exceptions", "col": 5, "type": "security", "label": "의료·안전", "sublabel": "즉시 escalation", "yOffset": 70 }
+  ],
+  "edges": [
+    { "id": "question_scope", "from": "question", "to": "scope_filter", "variant": "security", "role": "main" },
+    { "id": "scope_fts", "from": "scope_filter", "to": "fts", "variant": "default", "role": "main" },
+    { "id": "scope_embedding", "from": "scope_filter", "to": "embedding", "variant": "default", "role": "branch" },
+    { "id": "fts_rrf", "from": "fts", "to": "rrf", "variant": "default", "role": "main" },
+    { "id": "embedding_rrf", "from": "embedding", "to": "rrf", "variant": "default", "role": "branch" },
+    { "id": "rrf_rerank", "from": "rrf", "to": "rerank", "variant": "emphasis", "role": "main" },
+    { "id": "rerank_priority", "from": "rerank", "to": "priority", "variant": "emphasis", "role": "main" },
+    { "id": "priority_gate", "from": "priority", "to": "evidence_gate", "variant": "security", "role": "main" },
+    { "id": "gate_answer", "from": "evidence_gate", "to": "grounded_answer", "label": "충분", "variant": "emphasis", "role": "main" },
+    { "id": "gate_none", "from": "evidence_gate", "to": "no_evidence", "label": "부족", "variant": "security", "role": "error" },
+    { "id": "gate_conflict", "from": "evidence_gate", "to": "conflict", "label": "충돌", "variant": "security", "role": "branch" },
+    { "id": "gate_safety", "from": "evidence_gate", "to": "escalation", "label": "안전", "variant": "security", "role": "error" }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "검색 원칙",
+      "items": [
+        "FTS와 Embedding 검색을 병렬로 실행",
+        "RRF로 순위를 결합한 뒤 BGE-M3로 재정렬"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "응답 원칙",
+      "items": [
+        "검색 점수만으로 답변하지 않음",
+        "근거 판정을 통과한 정책만 인용"
+      ]
+    }
+  ]
+}

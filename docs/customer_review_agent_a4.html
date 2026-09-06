@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>고객 리뷰 분석 Agent</title>
+  <style>
+    :root {
+      --ink: #18231f;
+      --muted: #66736d;
+      --line: #dce5e0;
+      --purple: #6848a8;
+      --purple-soft: #f2edfb;
+      --blue: #2f6f9f;
+      --blue-soft: #edf6fc;
+      --orange: #c96a1b;
+      --orange-soft: #fff4e8;
+      --green: #34735b;
+      --green-soft: #edf7f2;
+      --shadow: 0 10px 30px rgba(28, 53, 43, .08);
+    }
+
+    * { box-sizing: border-box; }
+    html { background: #edf2ef; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      font-family: "Pretendard", "Noto Sans KR", "Malgun Gothic", sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .toolbar {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      padding: 12px;
+      background: rgba(237, 242, 239, .92);
+      backdrop-filter: blur(10px);
+    }
+    .toolbar button {
+      border: 1px solid #cbd8d1;
+      border-radius: 9px;
+      padding: 9px 15px;
+      background: #fff;
+      color: var(--ink);
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .page {
+      width: 210mm;
+      min-height: 297mm;
+      margin: 0 auto 24px;
+      padding: 15mm 14mm 13mm;
+      background: #fff;
+      box-shadow: var(--shadow);
+    }
+
+    .eyebrow {
+      margin: 0 0 7px;
+      color: var(--green);
+      font-size: 10.5pt;
+      font-weight: 800;
+      letter-spacing: .14em;
+    }
+    h1 {
+      margin: 0;
+      font-size: 25pt;
+      line-height: 1.18;
+      letter-spacing: -.045em;
+    }
+    .subtitle {
+      margin: 9px 0 17px;
+      color: var(--muted);
+      font-size: 10.5pt;
+    }
+
+    .pipeline {
+      display: grid;
+      gap: 8px;
+    }
+    .band {
+      --accent: var(--blue);
+      --soft: var(--blue-soft);
+      display: grid;
+      grid-template-columns: 27% 73%;
+      min-height: 33mm;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 13px;
+      background: #fff;
+    }
+    .band.aspect { --accent: var(--purple); --soft: var(--purple-soft); }
+    .band.verify { --accent: var(--orange); --soft: var(--orange-soft); }
+    .band.answer { --accent: var(--green); --soft: var(--green-soft); }
+
+    .band-copy {
+      position: relative;
+      padding: 15px 15px 13px 17px;
+      background: var(--soft);
+      border-right: 4px solid var(--accent);
+    }
+    .step {
+      display: inline-grid;
+      place-items: center;
+      width: 28px;
+      height: 28px;
+      margin-bottom: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      color: #fff;
+      font-size: 11pt;
+      font-weight: 900;
+    }
+    .band-copy h2 {
+      margin: 0 0 6px;
+      font-size: 12.5pt;
+      line-height: 1.28;
+      letter-spacing: -.025em;
+    }
+    .band-copy p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 8.5pt;
+      line-height: 1.48;
+    }
+
+    .flow {
+      display: grid;
+      align-items: center;
+      gap: 7px;
+      padding: 13px 15px;
+    }
+    .flow.five { grid-template-columns: 1fr 20px 1.05fr 20px 1.05fr 20px 1.12fr; }
+    .flow.three { grid-template-columns: 1fr 24px 1.35fr 24px 1.25fr; }
+    .flow.four { grid-template-columns: 1fr 20px 1fr 20px 1fr 20px 1.22fr; }
+
+    .node {
+      display: grid;
+      align-content: center;
+      justify-items: center;
+      min-height: 72px;
+      padding: 9px 7px;
+      border: 1.5px solid color-mix(in srgb, var(--accent) 62%, white);
+      border-radius: 10px;
+      background: color-mix(in srgb, var(--soft) 55%, white);
+      text-align: center;
+    }
+    .node.strong {
+      border-width: 2.5px;
+      background: var(--soft);
+    }
+    .node svg {
+      width: 24px;
+      height: 24px;
+      margin-bottom: 6px;
+      stroke: var(--accent);
+      fill: none;
+      stroke-width: 1.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .node b {
+      font-size: 8.7pt;
+      line-height: 1.25;
+    }
+    .node small {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 7pt;
+      line-height: 1.25;
+    }
+    .arrow {
+      color: var(--accent);
+      font-size: 18pt;
+      font-weight: 800;
+      text-align: center;
+    }
+    .guard {
+      grid-column: 1 / -1;
+      justify-self: center;
+      margin-top: -3px;
+      padding: 4px 10px;
+      border: 1px solid color-mix(in srgb, var(--accent) 45%, white);
+      border-radius: 999px;
+      background: #fff;
+      color: var(--accent);
+      font-size: 7.2pt;
+      font-weight: 800;
+    }
+
+    .explanation {
+      margin-top: 17px;
+      padding-top: 15px;
+      border-top: 2px solid #263b32;
+    }
+    .explanation h2 {
+      margin: 0 0 10px;
+      font-size: 13.5pt;
+    }
+    .notes {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 9px 14px;
+    }
+    .note {
+      display: grid;
+      grid-template-columns: 25px 1fr;
+      gap: 8px;
+      padding: 10px 11px;
+      border-radius: 9px;
+      background: #f7f9f8;
+    }
+    .note-number {
+      display: grid;
+      place-items: center;
+      width: 24px;
+      height: 24px;
+      border-radius: 7px;
+      background: #243b32;
+      color: #fff;
+      font-size: 8pt;
+      font-weight: 900;
+    }
+    .note p {
+      margin: 0;
+      font-size: 8.2pt;
+      line-height: 1.5;
+    }
+    .takeaway {
+      margin-top: 11px;
+      padding: 11px 14px;
+      border-left: 4px solid var(--purple);
+      background: var(--purple-soft);
+      font-size: 8.7pt;
+      line-height: 1.5;
+      font-weight: 700;
+    }
+
+    @media print {
+      html, body { background: #fff; }
+      .toolbar { display: none; }
+      .page { margin: 0; box-shadow: none; }
+    }
+    @page { size: A4 portrait; margin: 0; }
+  </style>
+</head>
+<body>
+  <div class="toolbar"><button onclick="window.print()">PDF로 인쇄 · 저장</button></div>
+  <main class="page">
+    <header>
+      <p class="eyebrow">CUSTOMER INTELLIGENCE · CORE PIPELINE</p>
+      <h1>검증된 SQL과 Aspect 기반<br />고객 리뷰 분석 Agent</h1>
+      <p class="subtitle">LLM은 질문을 해석하고, 검증된 코드가 조회·검증·집계를 수행합니다.</p>
+    </header>
+
+    <section class="pipeline" aria-label="고객 리뷰 분석 파이프라인">
+      <article class="band sql">
+        <div class="band-copy">
+          <span class="step">1</span>
+          <h2>LLM의 SQL 생성 위험을 제거했다</h2>
+          <p>Agent는 SQL을 직접 작성하지 않고 사전에 구현·검증된 Tool만 선택합니다.</p>
+        </div>
+        <div class="flow five">
+          <div class="node"><svg viewBox="0 0 24 24"><path d="M5 5h14v10H9l-4 4V5Z"/></svg><b>사용자 질문</b><small>자연어 분석 요청</small></div>
+          <span class="arrow">→</span>
+          <div class="node"><svg viewBox="0 0 24 24"><path d="M12 3v4M5.6 5.6l2.8 2.8M3 12h4M17 12h4M12 17v4"/><circle cx="12" cy="12" r="4"/></svg><b>Agent Tool 선택</b><small>의도·조건 해석</small></div>
+          <span class="arrow">→</span>
+          <div class="node strong"><svg viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/><path d="M4 4h16v16H4z"/></svg><b>검증된 SQL Tool</b><small>고정 Query·입력 검증</small></div>
+          <span class="arrow">→</span>
+          <div class="node"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="7" ry="3"/><path d="M5 5v7c0 1.7 3.1 3 7 3s7-1.3 7-3V5M5 12v7c0 1.7 3.1 3 7 3s7-1.3 7-3v-7"/></svg><b>PostgreSQL</b><small>리뷰 표본·정량 통계</small></div>
+          <span class="guard">LLM 직접 SQL 생성 없음</span>
+        </div>
+      </article>
+
+      <article class="band aspect">
+        <div class="band-copy">
+          <span class="step">2</span>
+          <h2>리뷰를 Aspect 단위로 구조화했다</h2>
+          <p>선별 리뷰에서 불만 유형과 판단 근거를 리뷰별 JSON으로 추출합니다.</p>
+        </div>
+        <div class="flow three">
+          <div class="node"><svg viewBox="0 0 24 24"><path d="M6 3h9l3 3v15H6zM9 10h6M9 14h6M9 18h4"/></svg><b>선별 리뷰</b><small>저평점·고공감 표본</small></div>
+          <span class="arrow">→</span>
+          <div class="node strong"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="3"/><path d="M9 9h.01M15 9h.01M8 14c2.3 2 5.7 2 8 0M12 2v3"/></svg><b>Aspect Extractor LLM</b><small>불만·감성·직접 경험 분석</small></div>
+          <span class="arrow">→</span>
+          <div class="node"><svg viewBox="0 0 24 24"><path d="M8 4C5 4 5 7 5 9s-1 3-3 3c2 0 3 1 3 3s0 5 3 5M16 4c3 0 3 3 3 5s1 3 3 3c-2 0-3 1-3 3s0 5-3 5"/></svg><b>Aspect JSON</b><small>Topic·Sentiment·Evidence</small></div>
+        </div>
+      </article>
+
+      <article class="band verify">
+        <div class="band-copy">
+          <span class="step">3</span>
+          <h2>원문 검증 후 반복 불만을 정량화했다</h2>
+          <p>LLM 결과를 그대로 사용하지 않고 Python 코드로 검증하고 집계합니다.</p>
+        </div>
+        <div class="flow four">
+          <div class="node"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4zM7 9h10M7 13h7"/></svg><b>Aspect JSON</b><small>리뷰별 추출 결과</small></div>
+          <span class="arrow">→</span>
+          <div class="node strong"><svg viewBox="0 0 24 24"><path d="M12 3 4 6v6c0 5 3.4 8 8 9 4.6-1 8-4 8-9V6z"/><path d="m8.5 12 2.2 2.2 4.8-5"/></svg><b>원문 근거 검증</b><small>없는 Evidence 제거</small></div>
+          <span class="arrow">→</span>
+          <div class="node"><svg viewBox="0 0 24 24"><path d="M5 19V9M12 19V5M19 19v-7M3 19h18"/></svg><b>Python 집계</b><small>중복 제거·빈도 계산</small></div>
+          <span class="arrow">→</span>
+          <div class="node"><svg viewBox="0 0 24 24"><path d="M5 5h14v14H5zM8 9h8M8 13h8M8 17h5"/></svg><b>구조화 결과</b><small>Aspect·빈도·비율·근거</small></div>
+          <span class="guard">원문에 존재하는 근거만 유지</span>
+        </div>
+      </article>
+
+      <article class="band answer">
+        <div class="band-copy">
+          <span class="step">4</span>
+          <h2>구조화 결과를 Agent 판단 근거로 활용했다</h2>
+          <p>정량 통계와 검증된 Evidence를 최종 LLM 입력으로 제공합니다.</p>
+        </div>
+        <div class="flow three">
+          <div class="node"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/><circle cx="19" cy="18" r="2"/></svg><b>Grounded Context</b><small>SQL 통계 + Aspect Pattern</small></div>
+          <span class="arrow">→</span>
+          <div class="node strong"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="3"/><path d="M8 10h8M8 14h5M12 2v3"/></svg><b>Final Agent LLM</b><small>검증 결과 기반 해석</small></div>
+          <span class="arrow">→</span>
+          <div class="node"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><path d="m15 9 5-5M16 4h4v4"/></svg><b>업무 활용 답변</b><small>반복 불만·영향·개선 우선순위</small></div>
+        </div>
+      </article>
+    </section>
+
+    <section class="explanation">
+      <h2>구현 방식</h2>
+      <div class="notes">
+        <div class="note"><span class="note-number">01</span><p>Agent가 질문을 해석해 검증된 SQL Tool을 선택하고, PostgreSQL에서 리뷰 표본과 통계를 조회합니다.</p></div>
+        <div class="note"><span class="note-number">02</span><p>Aspect Extractor가 리뷰별 불만 유형·감성·직접 경험 여부와 근거 문장을 구조화합니다.</p></div>
+        <div class="note"><span class="note-number">03</span><p>Python에서 Evidence의 원문 존재 여부를 검증하고 Aspect별 빈도·비율과 대표 근거를 집계합니다.</p></div>
+        <div class="note"><span class="note-number">04</span><p>최종 Agent는 구조화된 Tool 결과를 입력받아 반복 불만과 제품 개선 우선순위를 제시합니다.</p></div>
+      </div>
+      <div class="takeaway">핵심 설계: LLM에는 질문 해석과 의미 분류를 맡기고, 수치 조회·근거 검증·집계는 테스트 가능한 코드로 통제했습니다.</div>
+    </section>
+  </main>
+</body>
+</html>

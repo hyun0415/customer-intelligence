@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "고객 리뷰 분석 Agent의 모델 입력과 출력",
+    "subtitle": "세 모델 단계를 가로로 배치하고 각 단계의 입력, 모델, 출력을 세로로 비교",
+    "animation": "none",
+    "visual_preset": "editorial",
+    "quality_profile": "showcase",
+    "output": "docs/deliverables/customer_review_agent_model_io_horizontal.html",
+    "viewBox": [1200, 720]
+  },
+  "lanes": [
+    { "id": "input", "label": "INPUT" },
+    { "id": "model", "label": "MODEL" },
+    { "id": "output", "label": "OUTPUT" },
+    { "id": "code", "label": "검증된 코드" }
+  ],
+  "phases": [
+    { "id": "tool_phase", "label": "1. Tool 선택", "fromCol": 0, "toCol": 1, "variant": "default" },
+    { "id": "aspect_phase", "label": "2. Aspect 추출", "fromCol": 2, "toCol": 3, "variant": "emphasis" },
+    { "id": "answer_phase", "label": "3. 최종 답변", "fromCol": 4, "toCol": 5, "variant": "default" }
+  ],
+  "mainPath": [
+    "question_context",
+    "tool_model",
+    "tool_call",
+    "sql_execution",
+    "review_bundle",
+    "aspect_model",
+    "aspect_json",
+    "evidence_aggregate",
+    "grounded_context",
+    "final_model",
+    "business_answer"
+  ],
+  "nodes": [
+    { "id": "question_context", "lane": "input", "col": 0, "type": "external", "label": "사용자 질문", "sublabel": "대화 맥락과 자연어 요청" },
+    { "id": "tool_model", "lane": "model", "col": 0, "type": "cloud", "label": "Agent LLM", "sublabel": "질문 의도와 조회 조건 해석", "tag": "MODEL" },
+    { "id": "tool_call", "lane": "output", "col": 0, "type": "messagebus", "label": "Tool Call", "sublabel": "Tool 이름과 검증 가능한 인자" },
+    { "id": "sql_execution", "lane": "code", "col": 0, "type": "security", "label": "SQL Tool과 PostgreSQL", "sublabel": "고정 Query 실행", "tag": "LLM 외부 코드" },
+    { "id": "review_bundle", "lane": "input", "col": 2, "type": "external", "label": "리뷰 입력 묶음", "sublabel": "리뷰 원문, 추출 규칙, JSON Schema" },
+    { "id": "aspect_model", "lane": "model", "col": 2, "type": "cloud", "label": "Aspect Extractor LLM", "sublabel": "불만 유형과 감성, 근거 식별", "tag": "MODEL" },
+    { "id": "aspect_json", "lane": "output", "col": 2, "type": "messagebus", "label": "Aspect JSON", "sublabel": "Term, Sentiment, Evidence" },
+    { "id": "evidence_aggregate", "lane": "code", "col": 2, "type": "security", "label": "원문 검증과 Python 집계", "sublabel": "없는 근거와 중복 제거, 빈도 계산", "tag": "LLM 외부 코드" },
+    { "id": "grounded_context", "lane": "input", "col": 4, "type": "external", "label": "Grounded Context", "sublabel": "질문, SQL 통계, 검증 Aspect, 리뷰 근거" },
+    { "id": "final_model", "lane": "model", "col": 4, "type": "cloud", "label": "Final Agent LLM", "sublabel": "검증 결과를 업무 관점으로 해석", "tag": "MODEL" },
+    { "id": "business_answer", "lane": "output", "col": 4, "type": "backend", "label": "업무 활용 답변", "sublabel": "반복 불만, 수치, 대표 근거, 개선 우선순위" }
+  ],
+  "edges": [
+    { "id": "input_tool_model", "from": "question_context", "to": "tool_model", "role": "main", "variant": "default" },
+    { "id": "tool_model_output", "from": "tool_model", "to": "tool_call", "role": "main", "variant": "emphasis" },
+    { "id": "tool_to_sql", "from": "tool_call", "to": "sql_execution", "role": "main", "variant": "security" },
+    { "id": "sql_to_reviews", "from": "sql_execution", "to": "review_bundle", "label": "리뷰 표본과 통계", "role": "main", "variant": "default" },
+    { "id": "reviews_to_aspect", "from": "review_bundle", "to": "aspect_model", "role": "main", "variant": "default" },
+    { "id": "aspect_to_json", "from": "aspect_model", "to": "aspect_json", "role": "main", "variant": "emphasis" },
+    { "id": "json_to_verify", "from": "aspect_json", "to": "evidence_aggregate", "role": "main", "variant": "security" },
+    { "id": "verify_to_context", "from": "evidence_aggregate", "to": "grounded_context", "label": "검증된 집계 결과", "role": "main", "variant": "default" },
+    { "id": "context_to_final", "from": "grounded_context", "to": "final_model", "role": "main", "variant": "default" },
+    { "id": "final_to_answer", "from": "final_model", "to": "business_answer", "role": "main", "variant": "emphasis" }
+  ]
+}

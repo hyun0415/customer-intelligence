@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>고객 리뷰 분석 Agent의 모델 입력과 출력</title>
+  <style>
+    :root {
+      --ink: #17231f;
+      --muted: #64716b;
+      --line: #d8e3de;
+      --canvas: #ffffff;
+      --page: #edf3f0;
+      --input: #f7f9f8;
+      --input-line: #8b9892;
+      --model: #f1ecfb;
+      --model-line: #6b4bb2;
+      --output: #edf7f2;
+      --output-line: #2f765b;
+      --code: #edf6fc;
+      --code-line: #2e6f9f;
+      --accent: #27664f;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; background: var(--page); }
+    body {
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      color: var(--ink);
+      font-family: "Noto Sans KR", "Malgun Gothic", sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    .slide {
+      position: relative;
+      width: min(1440px, 100%);
+      aspect-ratio: 16 / 9;
+      overflow: hidden;
+      padding: 42px 54px 34px;
+      background: var(--canvas);
+      box-shadow: 0 16px 46px rgba(28, 55, 44, .12);
+    }
+    .eyebrow {
+      margin: 0 0 8px;
+      color: var(--accent);
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: .14em;
+    }
+    h1 {
+      margin: 0;
+      font-size: 32px;
+      line-height: 1.18;
+      letter-spacing: -.035em;
+      word-break: keep-all;
+    }
+    .subtitle {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.45;
+      word-break: keep-all;
+    }
+    .pipeline {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 70px minmax(0, 1fr) 70px minmax(0, 1fr);
+      gap: 0;
+      align-items: center;
+      margin-top: 26px;
+    }
+    .stage {
+      position: relative;
+      height: 545px;
+      padding: 18px 22px 20px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: #fbfcfb;
+    }
+    .stage-head {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      height: 42px;
+      margin-bottom: 12px;
+    }
+    .step {
+      display: grid;
+      place-items: center;
+      flex: 0 0 34px;
+      height: 34px;
+      border-radius: 50%;
+      background: var(--ink);
+      color: #fff;
+      font-size: 15px;
+      font-weight: 900;
+    }
+    .stage h2 {
+      margin: 0;
+      font-size: 19px;
+      letter-spacing: -.02em;
+      word-break: keep-all;
+    }
+    .node {
+      display: grid;
+      grid-template-columns: 44px minmax(0, 1fr);
+      column-gap: 12px;
+      align-items: center;
+      min-height: 91px;
+      padding: 13px 16px;
+      border: 1.5px solid;
+      border-radius: 13px;
+      background: #fff;
+    }
+    .node.input { border-color: var(--input-line); background: var(--input); }
+    .node.model { border: 2.5px solid var(--model-line); background: var(--model); }
+    .node.output { border-color: var(--output-line); background: var(--output); }
+    .node.code { border-color: var(--code-line); background: var(--code); }
+    .icon {
+      display: grid;
+      place-items: center;
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      background: rgba(255,255,255,.76);
+    }
+    .icon svg { width: 25px; height: 25px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .input .icon { color: #68756f; }
+    .model .icon { color: var(--model-line); }
+    .output .icon { color: var(--output-line); }
+    .code .icon { color: var(--code-line); }
+    .node-label {
+      margin: 0 0 3px;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 900;
+      letter-spacing: .1em;
+    }
+    .node-title {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 800;
+      line-height: 1.34;
+      word-break: keep-all;
+      overflow-wrap: normal;
+    }
+    .node-detail {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 11.5px;
+      line-height: 1.42;
+      word-break: keep-all;
+      overflow-wrap: normal;
+    }
+    .node code {
+      font-family: "Cascadia Mono", Consolas, monospace;
+      font-size: 10.5px;
+      white-space: nowrap;
+    }
+    .tech-row { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+    .tech {
+      display: inline-flex;
+      align-items: center;
+      min-height: 20px;
+      padding: 2px 7px;
+      border: 1px solid currentColor;
+      border-radius: 999px;
+      background: rgba(255,255,255,.8);
+      font-size: 9.5px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+    .tech.openai { color: #111; }
+    .tech.langgraph { color: #5b3da1; }
+    .tech.postgres { color: #336791; }
+    .tech.python { color: #286da8; }
+    .down {
+      position: relative;
+      width: 2px;
+      height: 19px;
+      margin: 3px auto;
+      background: #9aa9a2;
+    }
+    .down::after {
+      content: "";
+      position: absolute;
+      left: -4px;
+      bottom: -1px;
+      width: 8px;
+      height: 8px;
+      border-right: 2px solid #788880;
+      border-bottom: 2px solid #788880;
+      transform: rotate(45deg);
+    }
+    .bridge {
+      display: grid;
+      place-items: center;
+      gap: 7px;
+      color: var(--accent);
+    }
+    .bridge-label {
+      width: 68px;
+      color: var(--muted);
+      font-size: 9.5px;
+      font-weight: 700;
+      line-height: 1.35;
+      text-align: center;
+      word-break: keep-all;
+    }
+    .bridge-line {
+      position: relative;
+      width: 48px;
+      height: 3px;
+      border-radius: 3px;
+      background: var(--accent);
+    }
+    .bridge-line::after {
+      content: "";
+      position: absolute;
+      right: -1px;
+      top: -5px;
+      border-top: 6px solid transparent;
+      border-bottom: 6px solid transparent;
+      border-left: 10px solid var(--accent);
+    }
+    .legend {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 18px;
+      padding-top: 14px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 11px;
+    }
+    .legend-items { display: flex; gap: 18px; }
+    .legend-item { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+    .swatch { width: 10px; height: 10px; border-radius: 3px; }
+    .note { font-weight: 700; color: #48564f; }
+    @media print {
+      @page { size: 16in 9in; margin: 0; }
+      html, body { background: #fff; }
+      body { padding: 0; }
+      .slide { width: 16in; height: 9in; box-shadow: none; }
+    }
+  </style>
+</head>
+<body>
+  <svg width="0" height="0" aria-hidden="true" style="position:absolute">
+    <defs>
+      <symbol id="i-input" viewBox="0 0 24 24"><path d="M4 4h10l4 4v12H4z"/><path d="M14 4v4h4M8 13h8M8 17h5"/></symbol>
+      <symbol id="i-ai" viewBox="0 0 24 24"><circle cx="7" cy="7" r="2"/><circle cx="17" cy="7" r="2"/><circle cx="12" cy="17" r="2"/><path d="M9 7h6M8.2 8.5l2.8 6.7M15.8 8.5 13 15.2"/></symbol>
+      <symbol id="i-tool" viewBox="0 0 24 24"><path d="M4 6h16M7 6v12M4 18h16"/><path d="M11 10h6M11 14h4"/></symbol>
+      <symbol id="i-db" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="7" ry="3"/><path d="M5 5v7c0 1.7 3.1 3 7 3s7-1.3 7-3V5M5 12v7c0 1.7 3.1 3 7 3s7-1.3 7-3v-7"/></symbol>
+      <symbol id="i-json" viewBox="0 0 24 24"><path d="M8 4C5 4 5 7 5 9s-1 3-3 3c2 0 3 1 3 3s0 5 3 5M16 4c3 0 3 3 3 5s1 3 3 3c-2 0-3 1-3 3s0 5-3 5"/></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><path d="M12 3 4 6v6c0 5 3.4 8 8 9 4.6-1 8-4 8-9V6z"/><path d="m8.5 12 2.2 2.2 4.8-5"/></symbol>
+      <symbol id="i-answer" viewBox="0 0 24 24"><path d="M5 5h14v11H9l-4 4z"/><path d="M8 9h8M8 13h5"/></symbol>
+    </defs>
+  </svg>
+
+  <main class="slide">
+    <header>
+      <p class="eyebrow">CUSTOMER INTELLIGENCE</p>
+      <h1>고객 리뷰 분석 Agent의 모델 입력과 출력</h1>
+      <p class="subtitle">각 단계에서 모델이 받는 정보와 생성 결과를 분리하고, 조회·검증·집계는 테스트 가능한 코드로 통제했습니다.</p>
+    </header>
+
+    <section class="pipeline" aria-label="고객 리뷰 분석 Agent 모델 입출력 흐름">
+      <article class="stage">
+        <div class="stage-head"><span class="step">1</span><h2>Tool 호출과 리뷰 조회</h2></div>
+        <div class="node input"><span class="icon"><svg><use href="#i-input"/></svg></span><div><p class="node-label">INPUT</p><p class="node-title">“이 상품의 반복 불만과 개선점을 알려줘”</p><p class="node-detail">사용자 질문과 대화 맥락</p></div></div>
+        <div class="down"></div>
+        <div class="node model"><span class="icon"><svg><use href="#i-ai"/></svg></span><div><p class="node-label">MODEL</p><p class="node-title">Agent LLM</p><p class="node-detail">질문 의도와 조회 조건 해석</p><div class="tech-row"><span class="tech openai">OpenAI API</span><span class="tech langgraph">LangGraph</span></div></div></div>
+        <div class="down"></div>
+        <div class="node output"><span class="icon"><svg><use href="#i-tool"/></svg></span><div><p class="node-label">TOOL CALL</p><p class="node-title"><code>get_review_patterns_tool</code></p><p class="node-detail">parent_asin · limit=20</p></div></div>
+        <div class="down"></div>
+        <div class="node code"><span class="icon"><svg><use href="#i-db"/></svg></span><div><p class="node-label">TOOL INTERNAL</p><p class="node-title">검증된 SQL로 리뷰 조회</p><p class="node-detail">3점 이하·공감표 1 이상 표본 선별</p><div class="tech-row"><span class="tech postgres">PostgreSQL</span></div></div></div>
+      </article>
+
+      <div class="bridge"><span class="bridge-label">조회된<br/>리뷰 표본</span><span class="bridge-line"></span></div>
+
+      <article class="stage">
+        <div class="stage-head"><span class="step">2</span><h2>Tool 내부 분석</h2></div>
+        <div class="node input"><span class="icon"><svg><use href="#i-input"/></svg></span><div><p class="node-label">TOOL INTERNAL INPUT</p><p class="node-title">조회된 리뷰 표본</p><p class="node-detail">리뷰 원문·평점·공감표<br/>추출 규칙·JSON Schema</p></div></div>
+        <div class="down"></div>
+        <div class="node model"><span class="icon"><svg><use href="#i-ai"/></svg></span><div><p class="node-label">MODEL</p><p class="node-title">Aspect Extractor LLM</p><p class="node-detail">불만 유형과 감성, 근거 문장 식별</p><div class="tech-row"><span class="tech openai">OpenAI API</span></div></div></div>
+        <div class="down"></div>
+        <div class="node output"><span class="icon"><svg><use href="#i-json"/></svg></span><div><p class="node-label">MODEL OUTPUT</p><p class="node-title">Aspect JSON</p><p class="node-detail">Aspect Term · Sentiment · Evidence</p></div></div>
+        <div class="down"></div>
+        <div class="node output"><span class="icon"><svg><use href="#i-check"/></svg></span><div><p class="node-label">TOOL RESULT</p><p class="node-title"><code>ReviewPatternResult</code></p><p class="node-detail">원문 검증 후 Aspect 빈도·표본 내 비율·근거</p><div class="tech-row"><span class="tech python">Python 집계</span></div></div></div>
+      </article>
+
+      <div class="bridge"><span class="bridge-label">구조화된<br/>Tool 결과</span><span class="bridge-line"></span></div>
+
+      <article class="stage">
+        <div class="stage-head"><span class="step">3</span><h2>최종 답변 생성</h2></div>
+        <div class="node input"><span class="icon"><svg><use href="#i-input"/></svg></span><div><p class="node-label">INPUT</p><p class="node-title">질문 + <code>ReviewPatternResult</code></p><p class="node-detail">선정 기준·Aspect 빈도·표본 내 비율<br/>대표 리뷰 원문 근거</p></div></div>
+        <div class="down"></div>
+        <div class="node model"><span class="icon"><svg><use href="#i-ai"/></svg></span><div><p class="node-label">MODEL</p><p class="node-title">Final Agent LLM</p><p class="node-detail">검증 결과를 업무 관점으로 해석</p><div class="tech-row"><span class="tech openai">OpenAI API</span></div></div></div>
+        <div class="down"></div>
+        <div class="node output"><span class="icon"><svg><use href="#i-answer"/></svg></span><div><p class="node-label">FINAL OUTPUT</p><p class="node-title">업무 활용 답변</p><p class="node-detail">반복 불만·수치·대표 근거<br/>제품 개선 우선순위</p></div></div>
+      </article>
+    </section>
+
+    <footer class="legend">
+      <div class="legend-items">
+        <span class="legend-item"><i class="swatch" style="background:var(--input)"></i>입력</span>
+        <span class="legend-item"><i class="swatch" style="background:var(--model)"></i>LLM</span>
+        <span class="legend-item"><i class="swatch" style="background:var(--output)"></i>모델 출력</span>
+        <span class="legend-item"><i class="swatch" style="background:var(--code)"></i>검증된 코드</span>
+      </div>
+      <span class="note">LLM이 SQL을 직접 생성하지 않으며, 원문에 없는 Evidence는 집계 전에 제거합니다.</span>
+    </footer>
+  </main>
+</body>
+</html>

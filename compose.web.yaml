@@ -1,0 +1,43 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      target: runtime
+    env_file: .env
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      FRONTEND_URL: http://localhost:3000
+      RAG_RERANKER_ENABLED: "false"
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        BACKEND_URL: http://backend:8000
+    environment:
+      BACKEND_URL: http://backend:8000
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      - backend
+
+  # 실제 GPU 환경에서는 이 서비스를 NVIDIA runtime이 설정된 별도 Host/EKS
+  # GPU Node에 배치하고 VLLM_BASE_URL을 backend에 전달한다.
+  vllm:
+    image: vllm/vllm-openai:latest
+    profiles: ["gpu"]
+    command: ["--model", "${VLLM_AGENT_MODEL:-Qwen/Qwen3-30B-A3B-Instruct-2507}"]
+    ports:
+      - "127.0.0.1:8001:8000"

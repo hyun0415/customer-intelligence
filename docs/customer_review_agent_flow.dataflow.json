@@ -1,0 +1,216 @@
+{
+  "schema_version": 1,
+  "diagram_type": "dataflow",
+  "meta": {
+    "title": "검증된 SQL과 Aspect 기반 고객 리뷰 분석 Agent",
+    "subtitle": "LLM은 Tool을 선택하고, 검증된 코드가 조회·검증·집계를 수행합니다",
+    "output": "docs/customer_review_agent_flow.html",
+    "viewBox": [1080, 820],
+    "animation": "none",
+    "visual_preset": "editorial",
+    "quality_profile": "showcase"
+  },
+  "stages": [
+    { "label": "① 검증된 SQL 조회" },
+    { "label": "② Aspect 구조화" },
+    { "label": "③ 원문 검증·집계" },
+    { "label": "④ 근거 기반 답변" }
+  ],
+  "nodes": [
+    {
+      "id": "question",
+      "type": "frontend",
+      "label": "사용자 질문",
+      "sublabel": "자연어 분석 요청",
+      "tag": "INPUT",
+      "stage": 0,
+      "row": 0
+    },
+    {
+      "id": "toolSelector",
+      "type": "backend",
+      "label": "Agent Tool 선택",
+      "sublabel": "직접 SQL 생성 없음",
+      "tag": "LANGGRAPH",
+      "stage": 0,
+      "row": 2
+    },
+    {
+      "id": "sqlTools",
+      "type": "security",
+      "label": "검증된 SQL Tool",
+      "sublabel": "고정 Query · 입력 검증",
+      "tag": "GUARDRAIL",
+      "stage": 0,
+      "row": 4
+    },
+    {
+      "id": "reviewDb",
+      "type": "database",
+      "label": "PostgreSQL",
+      "sublabel": "리뷰 표본 · 정량 통계",
+      "tag": "203,648 REVIEWS",
+      "stage": 1,
+      "row": 1
+    },
+    {
+      "id": "aspectExtractor",
+      "type": "cloud",
+      "label": "Aspect Extractor LLM",
+      "sublabel": "불만 · 감성 · 직접 경험 · Evidence",
+      "tag": "STRUCTURED JSON",
+      "stage": 1,
+      "row": 4,
+      "width": 160
+    },
+    {
+      "id": "evidenceCheck",
+      "type": "security",
+      "label": "원문 Evidence 검증",
+      "sublabel": "원문에 없는 근거 제거",
+      "tag": "PYTHON",
+      "stage": 2,
+      "row": 1
+    },
+    {
+      "id": "patternAggregate",
+      "type": "backend",
+      "label": "Aspect 집계",
+      "sublabel": "빈도 · 비율 · 신뢰도 · 대표 근거",
+      "tag": "DETERMINISTIC",
+      "stage": 2,
+      "row": 4,
+      "width": 160
+    },
+    {
+      "id": "structuredContext",
+      "type": "messagebus",
+      "label": "구조화된 Tool 결과",
+      "sublabel": "SQL 통계 + Aspect Pattern",
+      "tag": "GROUNDED CONTEXT",
+      "stage": 3,
+      "row": 0
+    },
+    {
+      "id": "finalAgent",
+      "type": "backend",
+      "label": "Final Agent LLM",
+      "sublabel": "검증된 결과를 입력으로 사용",
+      "tag": "LANGGRAPH",
+      "stage": 3,
+      "row": 2
+    },
+    {
+      "id": "answer",
+      "type": "frontend",
+      "label": "업무 활용 답변",
+      "sublabel": "반복 불만 · 영향 · 개선 우선순위",
+      "tag": "OUTPUT",
+      "stage": 3,
+      "row": 4,
+      "width": 160
+    }
+  ],
+  "flows": [
+    {
+      "id": "questionToSelector",
+      "from": "question",
+      "to": "toolSelector",
+      "label": "질문 의도",
+      "classification": "natural language",
+      "variant": "emphasis"
+    },
+    {
+      "id": "selectorToSql",
+      "from": "toolSelector",
+      "to": "sqlTools",
+      "label": "검증된 Tool 호출",
+      "classification": "validated arguments",
+      "variant": "security"
+    },
+    {
+      "id": "sqlToDb",
+      "from": "sqlTools",
+      "to": "reviewDb",
+      "label": "고정 Query",
+      "classification": "deterministic SQL",
+      "variant": "security"
+    },
+    {
+      "id": "dbToExtractor",
+      "from": "reviewDb",
+      "to": "aspectExtractor",
+      "label": "선별 리뷰 + 통계",
+      "classification": "sampled evidence",
+      "variant": "emphasis"
+    },
+    {
+      "id": "extractorToEvidence",
+      "from": "aspectExtractor",
+      "to": "evidenceCheck",
+      "label": "Aspect JSON",
+      "classification": "structured extraction",
+      "variant": "default",
+      "labelDy": -50
+    },
+    {
+      "id": "evidenceToAggregate",
+      "from": "evidenceCheck",
+      "to": "patternAggregate",
+      "label": "검증된 Aspect",
+      "classification": "validated evidence",
+      "variant": "security"
+    },
+    {
+      "id": "aggregateToContext",
+      "from": "patternAggregate",
+      "to": "structuredContext",
+      "label": "빈도 · 비율 · 근거",
+      "classification": "aggregated patterns",
+      "variant": "emphasis",
+      "labelDy": 53
+    },
+    {
+      "id": "contextToAgent",
+      "from": "structuredContext",
+      "to": "finalAgent",
+      "label": "구조화 입력",
+      "classification": "tool result",
+      "variant": "emphasis",
+      "route": "straight",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelDy": 50
+    },
+    {
+      "id": "agentToAnswer",
+      "from": "finalAgent",
+      "to": "answer",
+      "label": "분석 답변",
+      "classification": "actionable insight",
+      "variant": "emphasis",
+      "route": "straight",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelDy": 50
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "결정론적 데이터 경계",
+      "items": [
+        "LLM은 SQL을 직접 작성하지 않고 사전에 구현된 Tool만 선택합니다.",
+        "평점·비율·표본 수는 PostgreSQL과 Python 코드가 계산합니다."
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "Aspect 기반 LLM 활용",
+      "items": [
+        "리뷰별 불만과 감성을 구조화하고 근거 문장을 함께 추출합니다.",
+        "검증·집계된 결과만 Final Agent의 판단 근거로 전달합니다."
+      ]
+    }
+  ]
+}

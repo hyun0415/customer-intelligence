@@ -21,7 +21,7 @@ INTERNAL_KNOWLEDGE_RULES = """
    단정하지 말고, "현재 검색된 승인 정책에서 충분히 관련된 근거를 찾지 못했다"고
    안내한다. 상품, 주문 상황, 관할 등 검색에 필요한 정보가 빠졌다면 이를 요청하고,
    추가 확인이 불가능하면 담당자 확인이 필요함을 알린다. 의료·안전 문제는
-   no_evidence와 무관하게 즉시 escalation한다.
+   no_evidence와 무관하게 즉시 escalate_case_tool을 호출하고 escalation 사실을 알린다.
 
    no_evidence는 검색 후보가 없을 때뿐 아니라, 검색된 후보가 질문의 중요 조건을
    직접 뒷받침하지 못해 근거 유효성 판정에서 insufficient가 된 경우에도 반환된다.

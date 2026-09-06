@@ -1,7 +1,8 @@
-from typing import Optional
 
 from langchain_core.tools import tool
 
+from src.analysis.review_patterns import build_review_patterns
+from src.analysis.schemas import ReviewSelectionCriteria
 from src.database import (
     compare_products,
     get_helpful_reviews,
@@ -13,12 +14,7 @@ from src.database import (
     get_reviews_by_date,
     search_products,
 )
-
-from src.analysis.schemas import ReviewSelectionCriteria
-from src.analysis.review_patterns import build_review_patterns
 from src.rag_tools import search_internal_knowledge_tool
-
-
 
 
 @tool
@@ -61,7 +57,7 @@ def get_negative_reviews_tool(parent_asin: str, limit: int = 10):
 def get_helpful_reviews_tool(
     parent_asin: str,
     limit: int = 10,
-    rating_max: Optional[float] = None,
+    rating_max: float | None = None,
     min_helpful_votes: int = 1,
 ):
     """특정 제품에서 공감 투표가 많은 리뷰를 조회한다."""
@@ -85,7 +81,7 @@ def get_reviews_by_date_tool(
     start_at: str,
     end_at: str,
     limit: int = 20,
-    rating_max: Optional[float] = None,
+    rating_max: float | None = None,
     verified_only: bool = False,
 ):
     """특정 날짜 범위의 리뷰를 조회한다. 종료일은 포함하지 않는다."""
@@ -102,8 +98,8 @@ def get_reviews_by_date_tool(
 @tool
 def get_monthly_review_trend_tool(
     parent_asin: str,
-    start_at: Optional[str] = None,
-    end_at: Optional[str] = None,
+    start_at: str | None = None,
+    end_at: str | None = None,
 ):
     """특정 제품의 월별 리뷰 수, 평균 평점, 부정 비율을 조회한다."""
     return get_monthly_review_trend(
@@ -155,6 +151,24 @@ def get_review_patterns_tool(
     )
 
 
+@tool
+def escalate_case_tool(reason: str, category: str = "other"):
+    """
+    의료·안전 위험 또는 사람이 즉시 확인해야 하는 사안을 escalation한다.
+
+    category는 medical, safety, policy_conflict, other 중 하나를 사용한다.
+    이 도구는 요청을 표시하며, Web API가 로그인 사용자와 대화에 연결해 저장한다.
+    """
+    allowed = {"medical", "safety", "policy_conflict", "other"}
+    if category not in allowed:
+        raise ValueError(f"지원하지 않는 escalation category입니다: {category}")
+    return {
+        "status": "escalation",
+        "category": category,
+        "reason": reason,
+    }
+
+
 AGENT_TOOLS = [
     search_product_tool,
     get_product_tool,
@@ -167,6 +181,7 @@ AGENT_TOOLS = [
     compare_products_tool,
     get_review_patterns_tool,
     search_internal_knowledge_tool,
+    escalate_case_tool,
 ]
 
 

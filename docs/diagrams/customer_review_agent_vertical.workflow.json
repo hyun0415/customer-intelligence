@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "고객 리뷰 분석 Agent",
+    "subtitle": "검증된 조회부터 근거 기반 답변까지 이어지는 단일 분석 흐름",
+    "animation": "none",
+    "visual_preset": "editorial",
+    "quality_profile": "showcase",
+    "output": "docs/diagrams/customer_review_agent_vertical.html",
+    "viewBox": [900, 960]
+  },
+  "lanes": [
+    { "id": "intake", "label": "질문" },
+    { "id": "retrieval", "label": "1. 검증된 데이터 조회" },
+    { "id": "extraction", "label": "2. Aspect Term 추출" },
+    { "id": "verification", "label": "3. 원문 검증과 집계" },
+    { "id": "response", "label": "4. Agent 답변" }
+  ],
+  "mainPath": [
+    "question",
+    "router",
+    "sql_tool",
+    "postgres",
+    "extractor",
+    "aspect_json",
+    "evidence_check",
+    "python_aggregate",
+    "grounded_context",
+    "final_agent",
+    "answer"
+  ],
+  "nodes": [
+    { "id": "question", "lane": "intake", "col": 0, "type": "external", "label": "사용자 질문", "sublabel": "자연어 분석 요청" },
+    { "id": "router", "lane": "retrieval", "col": 0, "type": "backend", "label": "LangGraph Agent", "sublabel": "검증된 Tool 선택" },
+    { "id": "sql_tool", "lane": "retrieval", "col": 2, "type": "security", "label": "SQL Tool", "sublabel": "고정 Query와 입력 검증", "tag": "LLM의 SQL 생성 차단" },
+    { "id": "postgres", "lane": "retrieval", "col": 4, "type": "database", "label": "PostgreSQL", "sublabel": "리뷰 표본과 정량 통계" },
+    { "id": "extractor", "lane": "extraction", "col": 1, "type": "cloud", "label": "Aspect Extractor LLM", "sublabel": "불만 유형과 감성 분류" },
+    { "id": "aspect_json", "lane": "extraction", "col": 4, "type": "messagebus", "label": "Aspect JSON", "sublabel": "Term, Sentiment, Evidence" },
+    { "id": "evidence_check", "lane": "verification", "col": 1, "type": "security", "label": "원문 근거 검증", "sublabel": "없는 Evidence 제거", "tag": "원문 근거만 유지" },
+    { "id": "python_aggregate", "lane": "verification", "col": 3, "type": "backend", "label": "Python 집계", "sublabel": "중복 제거와 빈도 계산" },
+    { "id": "grounded_context", "lane": "verification", "col": 5, "type": "messagebus", "label": "Grounded Context", "sublabel": "Aspect, 빈도, 비율, 근거" },
+    { "id": "final_agent", "lane": "response", "col": 2, "type": "cloud", "label": "Final Agent LLM", "sublabel": "검증 결과 기반 해석" },
+    { "id": "answer", "lane": "response", "col": 5, "type": "backend", "label": "업무 활용 답변", "sublabel": "반복 불만과 개선 우선순위" }
+  ],
+  "edges": [
+    { "id": "question_router", "from": "question", "to": "router", "role": "main", "variant": "default" },
+    { "id": "router_sql", "from": "router", "to": "sql_tool", "role": "main", "variant": "default" },
+    { "id": "sql_postgres", "from": "sql_tool", "to": "postgres", "role": "main", "variant": "default" },
+    { "id": "postgres_extractor", "from": "postgres", "to": "extractor", "label": "리뷰 표본과 통계", "role": "main", "variant": "emphasis" },
+    { "id": "extractor_json", "from": "extractor", "to": "aspect_json", "role": "main", "variant": "default" },
+    { "id": "json_check", "from": "aspect_json", "to": "evidence_check", "role": "main", "variant": "emphasis" },
+    { "id": "check_aggregate", "from": "evidence_check", "to": "python_aggregate", "role": "main", "variant": "default" },
+    { "id": "aggregate_context", "from": "python_aggregate", "to": "grounded_context", "role": "main", "variant": "default" },
+    { "id": "context_agent", "from": "grounded_context", "to": "final_agent", "label": "검증된 분석 결과", "role": "main", "variant": "emphasis" },
+    { "id": "agent_answer", "from": "final_agent", "to": "answer", "role": "main", "variant": "emphasis" }
+  ]
+}

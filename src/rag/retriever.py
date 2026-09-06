@@ -6,6 +6,8 @@ from typing import Any
 from openai import OpenAIError
 from pgvector.vector import Vector
 
+from src.auth.access import ALL_COLLECTIONS
+
 from .config import ALL_DEPARTMENTS, ALL_JURISDICTIONS, RagSettings
 from .embeddings import EmbeddingProvider, OpenAIEmbeddingProvider
 from .evidence import EvidenceValidator, LLMEvidenceValidator
@@ -84,6 +86,29 @@ class HybridRetriever:
         if request.department:
             conditions.append("d.department = ANY(%s)")
             params.append([request.department, ALL_DEPARTMENTS])
+
+        if request.access_grants is not None:
+            if not request.access_grants:
+                conditions.append("FALSE")
+            else:
+                grant_conditions = []
+                for grant in request.access_grants:
+                    grant_parts = []
+                    if grant.collection != ALL_COLLECTIONS:
+                        grant_parts.append("col.name = %s")
+                        params.append(grant.collection)
+                    if grant.jurisdiction != ALL_JURISDICTIONS:
+                        grant_parts.append("d.jurisdiction = ANY(%s)")
+                        params.append(
+                            [grant.jurisdiction, ALL_JURISDICTIONS]
+                        )
+                    if grant.department != ALL_DEPARTMENTS:
+                        grant_parts.append("d.department = ANY(%s)")
+                        params.append([grant.department, ALL_DEPARTMENTS])
+                    grant_conditions.append(
+                        "(" + " AND ".join(grant_parts or ["TRUE"]) + ")"
+                    )
+                conditions.append("(" + " OR ".join(grant_conditions) + ")")
 
         return " AND ".join(conditions), params
 

@@ -4,6 +4,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
+from src.auth.access import PolicyAccessGrant
+
 from .config import ALL_DEPARTMENTS, ALL_JURISDICTIONS, DEFAULT_COLLECTIONS
 
 
@@ -77,6 +79,11 @@ class KnowledgeSearchRequest(BaseModel):
     jurisdiction: str | None = None
     effective_at: datetime | None = None
     limit: int = Field(default=5, ge=1, le=20)
+    access_grants: list[PolicyAccessGrant] | None = Field(
+        default=None,
+        exclude=True,
+        description="로그인 사용자의 서버 강제 정책 접근 범위",
+    )
 
     @field_validator("collections")
     @classmethod

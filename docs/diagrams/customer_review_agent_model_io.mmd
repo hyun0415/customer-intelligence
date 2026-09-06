@@ -1,0 +1,39 @@
+flowchart LR
+    subgraph M1["① Tool 선택 모델"]
+        direction TB
+        I1["INPUT<br/>사용자 질문<br/>대화 맥락"]
+        A1["Agent LLM<br/>질문 의도·조회 조건 해석"]
+        O1["OUTPUT<br/>Tool 이름<br/>검증 가능한 인자"]
+        SQL["검증된 SQL Tool + PostgreSQL<br/>고정 Query로 리뷰 표본·통계 조회"]
+        I1 --> A1 --> O1 --> SQL
+    end
+
+    subgraph M2["② Aspect 추출 모델"]
+        direction TB
+        I2["INPUT<br/>리뷰 원문<br/>추출 규칙·JSON Schema"]
+        A2["Aspect Extractor LLM<br/>불만 유형·감성·근거 식별"]
+        O2["OUTPUT<br/>Aspect Term<br/>Sentiment·Evidence"]
+        VERIFY["원문 근거 검증 + Python 집계<br/>없는 근거·중복 제거 / 빈도·비율 계산"]
+        I2 --> A2 --> O2 --> VERIFY
+    end
+
+    subgraph M3["③ 최종 답변 모델"]
+        direction TB
+        I3["INPUT<br/>사용자 질문·SQL 통계<br/>검증 Aspect·리뷰 근거"]
+        A3["Final Agent LLM<br/>검증 결과의 업무적 해석"]
+        O3["OUTPUT<br/>반복 불만·수치·대표 근거<br/>개선 우선순위"]
+        I3 --> A3 --> O3
+    end
+
+    SQL -->|"리뷰 표본·정량 통계"| I2
+    VERIFY -->|"Grounded Context"| I3
+
+    classDef input fill:#F7F9F8,stroke:#66736D,stroke-width:1.5px,color:#18231F;
+    classDef model fill:#F2EDFB,stroke:#6848A8,stroke-width:3px,color:#18231F;
+    classDef output fill:#EDF7F2,stroke:#34735B,stroke-width:2px,color:#18231F;
+    classDef code fill:#EDF6FC,stroke:#2F6F9F,stroke-width:2px,color:#18231F;
+
+    class I1,I2,I3 input;
+    class A1,A2,A3 model;
+    class O1,O2,O3 output;
+    class SQL,VERIFY code;

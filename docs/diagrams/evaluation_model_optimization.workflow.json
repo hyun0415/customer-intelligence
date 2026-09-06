@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "평가 자동화와 모델 최적화",
+    "subtitle": "고성능 모델로 설계를 검증한 뒤 같은 평가 기준으로 운영 모델과 로컬 후보를 비교합니다",
+    "animation": "none",
+    "visual_preset": "editorial",
+    "quality_profile": "showcase",
+    "viewBox": [1400, 850]
+  },
+  "lanes": [
+    { "id": "cases", "label": "고정 평가 세트" },
+    { "id": "models", "label": "모델 구성" },
+    { "id": "trace", "label": "실행 결과" },
+    { "id": "evaluation", "label": "공통 평가 체계" },
+    { "id": "feedback", "label": "비교와 개선" }
+  ],
+  "phases": [
+    { "id": "design", "label": "설계 타당성", "fromCol": 0, "toCol": 1 },
+    { "id": "optimize", "label": "API 최적화와 로컬 검토", "fromCol": 2, "toCol": 3, "variant": "emphasis" },
+    { "id": "evaluate", "label": "동일 기준 평가", "fromCol": 4, "toCol": 5, "variant": "security" }
+  ],
+  "groups": [
+    { "id": "model_progression", "label": "모델 전환 과정", "lane": "models", "fromCol": 1, "toCol": 3, "variant": "emphasis" },
+    { "id": "evaluation_stack", "label": "평가 자동화", "lane": "evaluation", "fromCol": 4, "toCol": 5, "variant": "security" }
+  ],
+  "mainPath": ["eval_set", "sol_reference", "api_baseline", "local_candidate", "execution_trace", "llm_judge", "scorecard", "improvement"],
+  "nodes": [
+    { "id": "eval_set", "lane": "cases", "col": 0, "type": "database", "label": "고정 평가 세트", "sublabel": "리뷰·정책·안전 시나리오", "tag": "같은 질문" },
+    { "id": "sol_reference", "lane": "models", "col": 1, "type": "cloud", "label": "Sol 타당성 검증", "sublabel": "설계 검증과 품질 상한" },
+    { "id": "api_baseline", "lane": "models", "col": 2, "type": "backend", "label": "Luna·Terra 운영 기준", "sublabel": "역할별 비용 최적화", "tag": "현재 기준" },
+    { "id": "local_candidate", "lane": "models", "col": 3, "type": "backend", "label": "Qwen·Gemma 로컬 후보", "sublabel": "향후 GPU 검증", "tag": "검토 중" },
+    { "id": "execution_trace", "lane": "trace", "col": 4, "type": "database", "label": "실행 결과와 Trace", "sublabel": "Tool·SQL·RAG·최종 답변" },
+    { "id": "tool_eval", "lane": "evaluation", "col": 4, "type": "security", "label": "Tool·Rule 평가", "sublabel": "선택·인자·수치·금지 규칙", "yOffset": -85 },
+    { "id": "rag_eval", "lane": "evaluation", "col": 4, "type": "security", "label": "RAG 단계 평가", "sublabel": "검색·재정렬·근거 판정", "yOffset": 0 },
+    { "id": "llm_judge", "lane": "evaluation", "col": 4, "type": "cloud", "label": "Sol LLM Judge", "sublabel": "근거성·분석·업무 활용성", "yOffset": 85 },
+    { "id": "scorecard", "lane": "evaluation", "col": 5, "type": "frontend", "label": "비교 결과표", "sublabel": "통과 항목·실패 위치·품질 차이" },
+    { "id": "improvement", "lane": "feedback", "col": 5, "type": "messagebus", "label": "설정 개선", "sublabel": "Prompt·모델 역할·검색 설정" }
+  ],
+  "edges": [
+    { "id": "cases_sol", "from": "eval_set", "to": "sol_reference", "role": "main" },
+    { "id": "sol_api", "from": "sol_reference", "to": "api_baseline", "variant": "emphasis", "role": "main" },
+    { "id": "api_local", "from": "api_baseline", "to": "local_candidate", "variant": "dashed", "role": "main" },
+    { "id": "local_trace", "from": "local_candidate", "to": "execution_trace", "role": "main" },
+    { "id": "trace_tool", "from": "execution_trace", "to": "tool_eval", "role": "branch" },
+    { "id": "trace_rag", "from": "execution_trace", "to": "rag_eval", "role": "branch" },
+    { "id": "trace_judge", "from": "execution_trace", "to": "llm_judge", "variant": "emphasis", "role": "main" },
+    { "id": "tool_score", "from": "tool_eval", "to": "scorecard", "role": "branch" },
+    { "id": "rag_score", "from": "rag_eval", "to": "scorecard", "role": "branch" },
+    { "id": "judge_score", "from": "llm_judge", "to": "scorecard", "variant": "emphasis", "role": "main" },
+    { "id": "score_improve", "from": "scorecard", "to": "improvement", "variant": "security", "role": "main" },
+    { "id": "improve_api", "from": "improvement", "to": "api_baseline", "variant": "dashed", "role": "return", "route": "return-left", "fromSide": "left", "toSide": "left" }
+  ],
+  "cards": [
+    {
+      "dot": "violet",
+      "title": "모델 선택 원칙",
+      "items": [
+        "Sol은 설계 타당성과 품질 상한을 확인",
+        "Luna·Terra 구성을 실제 API 운영 기준으로 사용"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "평가 원칙",
+      "items": [
+        "모든 구성에 같은 질문과 기대 결과를 적용",
+        "총점보다 실패 위치와 품질 차이를 기록"
+      ]
+    }
+  ]
+}

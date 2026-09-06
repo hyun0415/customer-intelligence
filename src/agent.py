@@ -1,6 +1,7 @@
 from dotenv import load_dotenv
 from langchain.agents import create_agent
 from langchain_core.messages import AIMessage, ToolMessage
+
 from src.model_clients import build_chat_model
 from src.model_config import ModelRole, ModelRoutingSettings
 from src.prompts import SYSTEM_PROMPT
@@ -47,16 +48,14 @@ def print_tool_trace(messages):
 
 def run_agent(question: str):
     """에이전트 실행 결과 전체를 반환한다."""
-    return agent.invoke(
-        {
-            "messages": [
-                {
-                    "role": "user",
-                    "content": question,
-                }
-            ]
-        }
-    )
+    return run_agent_messages([{"role": "user", "content": question}])
+
+
+def run_agent_messages(messages: list[dict[str, str]]):
+    """저장된 대화 이력을 포함해 에이전트를 실행한다."""
+    if not messages:
+        raise ValueError("에이전트에 전달할 메시지가 없습니다.")
+    return agent.invoke({"messages": messages})
 
 
 def extract_text(content) -> str:

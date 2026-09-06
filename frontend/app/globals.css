@@ -1,0 +1,36 @@
+:root { color-scheme: light; --ink: #19231d; --muted: #68746d; --line: #dce4df; --paper: #f5f7f4; --green: #136f4a; }
+* { box-sizing: border-box; }
+body { margin: 0; color: var(--ink); background: var(--paper); font-family: Arial, "Noto Sans KR", sans-serif; }
+button, input, textarea { font: inherit; }
+button, .button { cursor: pointer; }
+.login-shell { min-height: 100vh; display: grid; place-items: center; padding: 24px; background: radial-gradient(circle at 20% 10%, #d8efe2, transparent 35%), var(--paper); }
+.login-card { width: min(560px, 100%); background: white; border: 1px solid var(--line); border-radius: 24px; padding: 48px; box-shadow: 0 24px 70px #274d3820; }
+h1 { font-size: clamp(32px, 5vw, 52px); line-height: 1.08; margin: 18px 0; }
+.eyebrow { color: var(--green); font-size: 12px; font-weight: 800; letter-spacing: .15em; }
+.muted { color: var(--muted); line-height: 1.6; }.small { font-size: 12px; }
+.primary { border: 0; border-radius: 10px; background: var(--green); color: white; padding: 12px 16px; font-weight: 700; text-decoration: none; text-align: center; }
+.login-card > .button { display: block; margin-top: 28px; }
+.dev-login { display: flex; gap: 8px; margin-top: 12px; }.dev-login input { min-width: 0; flex: 1; }
+input, textarea { border: 1px solid var(--line); border-radius: 10px; padding: 12px; background: white; }
+.dev-login button { border: 1px solid var(--line); border-radius: 10px; background: white; padding: 10px; }
+.error { color: #a02f2f; }.banner { padding: 0 24px; }
+.app-shell { height: 100vh; display: grid; grid-template-columns: 280px 1fr; }
+aside { display: flex; flex-direction: column; gap: 20px; padding: 24px; border-right: 1px solid var(--line); background: #eef3ef; }
+.account { display: grid; gap: 4px; }
+.account p { margin: 0; }
+.logout { justify-self: start; margin-top: 8px; padding: 0; border: 0; background: transparent; color: var(--muted); text-decoration: underline; }
+aside nav { display: flex; flex-direction: column; gap: 6px; overflow: auto; }
+aside nav button { text-align: left; border: 0; border-radius: 9px; padding: 11px; background: transparent; color: var(--ink); }
+aside nav button.active { background: white; box-shadow: 0 3px 15px #274d3812; }
+.chat-panel { min-width: 0; display: grid; grid-template-rows: auto 1fr auto auto; background: white; }
+.chat-panel header { padding: 18px 28px; border-bottom: 1px solid var(--line); }.chat-panel h2 { margin: 0; font-size: 18px; }
+.messages { overflow: auto; padding: 28px max(24px, calc((100% - 850px) / 2)); }
+.message { max-width: 78%; margin: 0 0 18px; padding: 14px 17px; border-radius: 16px; line-height: 1.65; white-space: pre-wrap; }
+.message p { margin: 0; }.message.user { margin-left: auto; background: #e8f2ec; }.message.assistant { background: var(--paper); border: 1px solid var(--line); }
+.markdown { white-space: normal; }.markdown p { margin: 0; }.markdown h2, .markdown h3 { margin: 12px 0 5px; line-height: 1.35; }.markdown h2 { font-size: 18px; }.markdown h3 { font-size: 16px; }.markdown-space { height: 10px; }.markdown-list { display: grid; grid-template-columns: 24px 1fr; gap: 2px; padding: 2px 0; }.markdown code { padding: 2px 5px; border-radius: 5px; background: #e5e9e6; font-family: Consolas, monospace; font-size: .92em; }
+.status { display: inline-block; margin-bottom: 8px; padding: 3px 8px; border-radius: 99px; font-size: 12px; font-weight: 800; background: #e8e8e8; }
+.status.no_evidence { background: #fff2c9; }.status.conflict, .status.escalation { background: #ffe0dc; color: #8a2720; }
+details { margin-top: 12px; color: var(--muted); }.source { display: flex; flex-direction: column; padding: 8px 0; border-top: 1px solid var(--line); }.source span { font-size: 12px; }
+.composer { display: flex; gap: 10px; padding: 16px max(24px, calc((100% - 850px) / 2)) 24px; border-top: 1px solid var(--line); }.composer textarea { flex: 1; min-height: 64px; resize: vertical; }.composer button { align-self: stretch; min-width: 80px; }
+.empty { display: grid; place-items: center; }
+@media (max-width: 760px) { .app-shell { grid-template-columns: 1fr; grid-template-rows: auto 1fr; } aside { padding: 12px; border-right: 0; border-bottom: 1px solid var(--line); } aside nav { flex-direction: row; } .message { max-width: 94%; } }

@@ -148,19 +148,23 @@ python -m eval.run_judge <evaluation-json-path>
 - 15개 평가 시나리오와 자동 평가 체계 구축
 - Numeric Checker, Rule Checker, LLM Judge 구축
 - Agent Tool Routing·Grounding 회귀 테스트 구축
+- FastAPI Agent API와 Next.js 대화 화면 구축
+- Google OIDC 로그인, Redis 세션, 3단계 RBAC와 정책 범위 강제 적용
+- Web·Backend·vLLM 별도 컨테이너 이미지 구성
 
 ## 향후 개선
 
-1. FastAPI 기반 Agent API 구현
-2. Streamlit 또는 웹 프런트엔드 구축
-3. 분석 결과 저장·조회 기능 추가
-4. 리뷰 임베딩과 의미 기반 검색 고도화
-5. 기간·상품군·경쟁 제품 비교 분석 지원
-6. Docker 기반 실행·배포 절차 정리
-7. 환경변수, 초기 데이터 적재, API 실행 방법 문서화
+1. Google OAuth client callback 등록과 실제 로그인 통합 검증
+2. 관리자 권한·escalation 화면과 SSE 응답 streaming
+3. 리뷰 임베딩과 의미 기반 검색 고도화
+4. 기간·상품군·경쟁 제품 비교 분석 지원
+5. EKS 배포 설정과 운영 관측성 추가
+6. Web 연결 후 실제 GPU 모델 통합 검증
 
 로컬 Qwen/Gemma 모델과 OpenAI API 전환 구조 및 Web 완성 후 GPU 검증 항목은
 [`docs/local_model_runtime.md`](docs/local_model_runtime.md)에 정리되어 있습니다.
+Next.js, FastAPI, OIDC, RBAC 기반 Web 구조는
+[`docs/web_architecture.md`](docs/web_architecture.md)에 정리되어 있습니다.
 
 ## 참고
 
