@@ -80,6 +80,15 @@ class HybridRetriever:
                 """
             )
             params.append(request.parent_asin)
+        else:
+            conditions.append(
+                """
+                NOT EXISTS (
+                    SELECT 1 FROM rag_document_products product_dp
+                    WHERE product_dp.document_id = d.document_id
+                )
+                """
+            )
         if request.jurisdiction:
             conditions.append("d.jurisdiction = ANY(%s)")
             params.append([request.jurisdiction, ALL_JURISDICTIONS])

@@ -5,6 +5,7 @@ from langchain_core.messages import AIMessage
 
 from src.agent import extract_text, run_agent_messages
 from src.auth.access import policy_access_context
+from src.auth.product_context import ProductContext, product_context
 
 from .execution import invoke_with_timeout
 from .models import AgentResponse, CurrentUser, MessageView, SourceView
@@ -47,9 +48,32 @@ class ConversationAgentService:
             {"role": message["role"], "content": message["content"]}
             for message in conversation["messages"][-20:]
         ]
+        active_product = None
+        if conversation.get("context_mode") == "product":
+            active_product = ProductContext(
+                parent_asin=conversation["product_parent_asin"],
+                title=conversation.get("product_title") or "선택 상품",
+            )
+            history.insert(
+                0,
+                {
+                    "role": "system",
+                    "content": (
+                        "이 대화에는 서버가 고정한 상품 컨텍스트가 있다. "
+                        f"상품명={active_product.title}, "
+                        f"parent_asin={active_product.parent_asin}. "
+                        "모든 상품·리뷰·정책 조회에는 이 parent_asin을 사용한다. "
+                        "사용자가 다른 상품을 요청하면 현재 대화의 상품을 바꾸지 말고 "
+                        "새 상품 대화를 시작하도록 안내한다."
+                    ),
+                },
+            )
 
         def invoke_agent():
-            with policy_access_context(user.policy_scopes):
+            with (
+                policy_access_context(user.policy_scopes),
+                product_context(active_product),
+            ):
                 return run_agent_messages(history)
 
         result = await invoke_with_timeout(invoke_agent, self.timeout_seconds)

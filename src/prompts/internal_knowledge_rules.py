@@ -9,6 +9,12 @@ INTERNAL_KNOWLEDGE_RULES = """
    search_internal_knowledge_tool을 모두 사용한다.
 
 3. parent_asin이 주어지면 정책 검색 Tool에도 동일한 parent_asin을 전달한다.
+   서버가 상품 컨텍스트를 제공한 대화에서는 그 parent_asin을 변경하지 않는다.
+   다른 상품을 요청받으면 현재 대화에서 전환하지 말고 새 상품 대화를 안내한다.
+
+   상품 컨텍스트가 없는 정책 검색은 전 상품 공통 정책만 대상으로 한다.
+   상품 전용 조건이 필요하지만 상품이 확정되지 않았다면 임의의 상품 정책을
+   선택하지 말고 상품명 또는 parent_asin 확인을 요청한다.
 
 4. 특정 시점의 정책을 묻는 경우 effective_at을 전달한다. 사용자가 시점을
    지정하지 않으면 Tool이 현재 유효 정책을 검색하도록 effective_at을 생략한다.

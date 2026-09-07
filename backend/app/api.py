@@ -1,14 +1,15 @@
-from typing import Annotated
 from dataclasses import asdict
+from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 
 from src.auth.access import ALL_COLLECTIONS
 from src.rag.config import ALL_DEPARTMENTS, ALL_JURISDICTIONS, DEFAULT_COLLECTIONS
 
-from .agent_service import ConversationAgentService
-from .audit import event_from_request
+from .agent_jobs import AgentJobStore, run_agent_job
+from .aspect_jobs import AspectJobStore, run_aspect_job
+from .audit import event_from_request, session_fingerprint
 from .dependencies import (
     current_user,
     get_repository,
@@ -16,14 +17,14 @@ from .dependencies import (
     get_settings,
     require_roles,
 )
-from .execution import AgentRequestTimeoutError, AgentUnavailableError
 from .health import dependency_status
 from .models import (
-    AgentResponse,
     ConversationCreate,
     ConversationDetail,
     ConversationSummary,
     CurrentUser,
+    DashboardProduct,
+    DashboardProductDetail,
     EscalationUpdate,
     MessageCreate,
     ScopeReplaceRequest,
@@ -72,7 +73,19 @@ def create_conversation(
     user: Annotated[CurrentUser, Depends(current_user)],
     repository: Annotated[WebRepository, Depends(get_repository)],
 ):
-    return repository.create_conversation(user.user_id, body.title)
+    if body.product_parent_asin and not repository.product_exists(
+        body.product_parent_asin
+    ):
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            "연결할 상품을 찾을 수 없습니다.",
+        )
+    return repository.create_conversation(
+        user.user_id,
+        body.title,
+        context_mode=body.context_mode,
+        product_parent_asin=body.product_parent_asin,
+    )
 
 
 @router.get("/conversations", response_model=list[ConversationSummary])
@@ -81,6 +94,102 @@ def list_conversations(
     repository: Annotated[WebRepository, Depends(get_repository)],
 ):
     return repository.list_conversations(user.user_id)
+
+
+@router.delete(
+    "/conversations/{conversation_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def archive_conversation(
+    conversation_id: UUID,
+    request: Request,
+    user: Annotated[CurrentUser, Depends(current_user)],
+    repository: Annotated[WebRepository, Depends(get_repository)],
+):
+    if not repository.archive_conversation(user.user_id, conversation_id):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "대화를 찾을 수 없습니다.")
+    settings = get_settings()
+    repository.record_security_event(
+        event_from_request(
+            request,
+            event_type="conversation_archived",
+            outcome="success",
+            session_secret=settings.session_secret,
+            session_id=request.cookies.get(settings.session_cookie_name),
+            actor_user_id=user.user_id,
+            resource_type="conversation",
+            resource_id=str(conversation_id),
+        )
+    )
+
+
+@router.get("/dashboard/products", response_model=list[DashboardProduct])
+def list_dashboard_products(
+    _user: Annotated[CurrentUser, Depends(current_user)],
+    repository: Annotated[WebRepository, Depends(get_repository)],
+    query: str | None = None,
+    limit: int = 12,
+):
+    if not 1 <= limit <= 50:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "limit은 1 이상 50 이하여야 합니다.",
+        )
+    return repository.list_dashboard_products(query=query, limit=limit)
+
+
+@router.get(
+    "/dashboard/products/{parent_asin}",
+    response_model=DashboardProductDetail,
+)
+def get_dashboard_product(
+    parent_asin: str,
+    _user: Annotated[CurrentUser, Depends(current_user)],
+    repository: Annotated[WebRepository, Depends(get_repository)],
+):
+    product = repository.get_dashboard_product(parent_asin)
+    if product is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "상품을 찾을 수 없습니다.")
+    return product
+
+
+@router.post(
+    "/dashboard/products/{parent_asin}/patterns",
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def analyze_dashboard_product_patterns(
+    parent_asin: str,
+    background_tasks: BackgroundTasks,
+    user: Annotated[CurrentUser, Depends(current_user)],
+    repository: Annotated[WebRepository, Depends(get_repository)],
+):
+    if not repository.product_exists(parent_asin):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "상품을 찾을 수 없습니다.")
+    job = AspectJobStore().create(
+        user_id=user.user_id,
+        parent_asin=parent_asin,
+    )
+    background_tasks.add_task(run_aspect_job, job["job_id"], parent_asin)
+    return {
+        "job_id": job["job_id"],
+        "parent_asin": parent_asin,
+        "status": job["status"],
+    }
+
+
+@router.get("/dashboard/pattern-jobs/{job_id}")
+def get_dashboard_pattern_job(
+    job_id: UUID,
+    user: Annotated[CurrentUser, Depends(current_user)],
+):
+    job = AspectJobStore().get(job_id)
+    if job is None or job["user_id"] != user.user_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "분석 작업을 찾을 수 없습니다.")
+    return {
+        key: value
+        for key, value in job.items()
+        if key != "user_id"
+    }
 
 
 @router.get("/conversations/{conversation_id}", response_model=ConversationDetail)
@@ -97,61 +206,57 @@ def get_conversation(
 
 @router.post(
     "/conversations/{conversation_id}/messages",
-    response_model=AgentResponse,
+    status_code=status.HTTP_202_ACCEPTED,
 )
-async def create_message(
+def create_message(
     conversation_id: UUID,
     body: MessageCreate,
     request: Request,
+    background_tasks: BackgroundTasks,
     user: Annotated[CurrentUser, Depends(current_user)],
     repository: Annotated[WebRepository, Depends(get_repository)],
 ):
-    try:
-        settings = get_settings()
-        return await ConversationAgentService(
-            repository,
-            timeout_seconds=settings.agent_request_timeout_seconds,
-        ).respond(
-            user=user,
-            conversation_id=conversation_id,
-            content=body.content,
-        )
-    except KeyError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "대화를 찾을 수 없습니다.") from exc
-    except AgentRequestTimeoutError as exc:
-        repository.record_security_event(
-            event_from_request(
-                request,
-                event_type="agent_request_failed",
-                outcome="timeout",
-                session_secret=settings.session_secret,
-                session_id=request.cookies.get(settings.session_cookie_name),
-                actor_user_id=user.user_id,
-                resource_type="conversation",
-                resource_id=str(conversation_id),
-            )
-        )
-        raise HTTPException(
-            status.HTTP_504_GATEWAY_TIMEOUT,
-            "답변 생성 시간이 초과되었습니다. 질문은 저장되었으며 잠시 후 다시 시도해 주세요.",
-        ) from exc
-    except AgentUnavailableError as exc:
-        repository.record_security_event(
-            event_from_request(
-                request,
-                event_type="agent_request_failed",
-                outcome="unavailable",
-                session_secret=settings.session_secret,
-                session_id=request.cookies.get(settings.session_cookie_name),
-                actor_user_id=user.user_id,
-                resource_type="conversation",
-                resource_id=str(conversation_id),
-            )
-        )
-        raise HTTPException(
-            status.HTTP_503_SERVICE_UNAVAILABLE,
-            "AI 서비스에 일시적으로 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.",
-        ) from exc
+    if repository.get_conversation(user.user_id, conversation_id) is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "대화를 찾을 수 없습니다.")
+    settings = get_settings()
+    job = AgentJobStore().create(
+        user_id=user.user_id,
+        conversation_id=conversation_id,
+    )
+    background_tasks.add_task(
+        run_agent_job,
+        job_id=job["job_id"],
+        user=user,
+        conversation_id=conversation_id,
+        content=body.content,
+        repository=repository,
+        timeout_seconds=settings.agent_request_timeout_seconds,
+        audit_context={
+            "request_id": request.state.request_id,
+            "session_fingerprint": session_fingerprint(
+                request.cookies.get(settings.session_cookie_name),
+                settings.session_secret,
+            ),
+            "ip_address": request.client.host if request.client else None,
+            "user_agent": request.headers.get("user-agent"),
+        },
+    )
+    return {
+        "job_id": job["job_id"],
+        "conversation_id": str(conversation_id),
+        "status": job["status"],
+    }
+
+
+@router.get("/conversation-jobs/{job_id}")
+def get_conversation_job(
+    job_id: UUID,
+    user: Annotated[CurrentUser, Depends(current_user)],
+):
+    job = AgentJobStore().get(job_id)
+    if job is None or job["user_id"] != user.user_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "답변 작업을 찾을 수 없습니다.")
+    return {key: value for key, value in job.items() if key != "user_id"}
 
 
 @router.get("/admin/users", response_model=list[CurrentUser])

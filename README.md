@@ -20,9 +20,9 @@
 
 - 데이터셋: Amazon Reviews 2023
 - 카테고리: Beauty and Personal Care
-- 상품: 555개
-- 리뷰: 203,648건
-- 부정·중립 리뷰(평점 3점 이하): 50,187건
+- 상품: 547개
+- 리뷰: 105,060건
+- 부정·중립 리뷰(평점 3점 이하): 25,152건
 
 `rating_number`는 Amazon 상품 메타데이터에 표시된 전체 평점 수이며, `review_count`는 현재 분석 데이터베이스에 저장된 리뷰 원문 수입니다.
 
@@ -197,6 +197,11 @@ manifest의 `approval_status`가 `APPROVED`인 유효 버전만 운영 검색 �
 
 ColBERT 재정렬 의존성은 별도로 설치합니다. 최초 실행 시 BGE-M3 모델을
 다운로드하며, 현재 기본 설정은 CPU와 작은 batch를 사용합니다.
+
+BGE-M3 재정렬 품질은 Colab A100에서 검증했으며, 기본 Web Docker 실행에서는
+로컬 자원 제약 때문에 비활성화되어 있습니다. 따라서 기본 Web은 PostgreSQL
+FTS·Embedding·RRF 결과와 LLM 근거 판정을 사용하고, BGE-M3를 실제 서비스 경로에
+포함할 때는 GPU 배포 환경에서 `runtime-reranker` 이미지를 별도로 검증합니다.
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -r requirements-rag-rerank.txt

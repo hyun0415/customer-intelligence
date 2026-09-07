@@ -18,6 +18,14 @@ export type Source = {
   title: string;
   version_number?: number;
   section_title?: string;
+  metadata?: {
+    collection?: string;
+    authority_tier?: number;
+    jurisdiction?: string;
+    department?: string;
+    parent_asins?: string[];
+    product_specific?: boolean;
+  };
 };
 
 export type Message = {
@@ -27,6 +35,7 @@ export type Message = {
   response_status?: "answer" | "no_evidence" | "conflict" | "escalation";
   created_at: string;
   sources: Source[];
+  delivery_state?: "sending" | "failed";
 };
 
 export type Conversation = {
@@ -35,6 +44,10 @@ export type Conversation = {
   created_at: string;
   updated_at: string;
   messages?: Message[];
+  context_mode: "general" | "product";
+  product_parent_asin: string | null;
+  product_title: string | null;
+  product_store: string | null;
 };
 
 export type Escalation = {
@@ -57,6 +70,77 @@ export type SecurityAuditEvent = {
   request_id: string;
   resource_type?: string;
   resource_id?: string;
+};
+
+export type DashboardProduct = {
+  parent_asin: string;
+  title: string;
+  store: string | null;
+  average_rating: number | null;
+  review_count: number;
+  negative_count: number;
+  negative_ratio: number;
+  verified_count: number;
+  verified_ratio: number;
+};
+
+export type DashboardReview = {
+  review_id: number;
+  rating: number;
+  review_title: string | null;
+  review_text: string | null;
+  reviewed_at: string;
+  helpful_vote: number;
+  verified_purchase: boolean;
+};
+
+export type DashboardProductDetail = DashboardProduct & {
+  rating_distribution: { rating: number; review_count: number }[];
+  representative_reviews: DashboardReview[];
+  min_review_at: string | null;
+  max_review_at: string | null;
+};
+
+export type ReviewPatternResult = {
+  sample_size: number;
+  ratio_denominator: number;
+  extracted_review_count: number;
+  pattern_review_count: number;
+  patterns: {
+    topic: string;
+    label: string;
+    description: string;
+    count: number;
+    ratio: number;
+    average_confidence: number;
+    evidence: {
+      source_index: number;
+      evidence: string;
+      confidence: number;
+      review_summary: string;
+    }[];
+  }[];
+};
+
+export type AspectJob = {
+  job_id: string;
+  parent_asin: string;
+  status: "queued" | "running" | "succeeded" | "failed";
+  result?: ReviewPatternResult;
+  error?: string;
+};
+
+export type AgentJob = {
+  job_id: string;
+  conversation_id: string;
+  status: "queued" | "running" | "succeeded" | "failed";
+  result?: {
+    status: string;
+    message: Message;
+    sources: Source[];
+  };
+  http_status?: number;
+  error?: string;
 };
 
 export class ApiError extends Error {

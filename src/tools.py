@@ -3,6 +3,7 @@ from langchain_core.tools import tool
 
 from src.analysis.review_patterns import build_review_patterns
 from src.analysis.schemas import ReviewSelectionCriteria
+from src.auth.product_context import get_product_context
 from src.database import (
     compare_products,
     get_helpful_reviews,
@@ -15,6 +16,11 @@ from src.database import (
     search_products,
 )
 from src.rag_tools import search_internal_knowledge_tool
+
+
+def _context_parent_asin(requested: str) -> str:
+    active = get_product_context()
+    return active.parent_asin if active is not None else requested
 
 
 @tool
@@ -34,6 +40,7 @@ def get_product_tool(parent_asin: str):
     - negative_count: 분석 DB에서 평점 3점 이하인 리뷰 수
     - verified_count: 분석 DB에서 구매 인증된 리뷰 수
     """
+    parent_asin = _context_parent_asin(parent_asin)
     product = get_product(parent_asin)
 
     if product is None:
@@ -44,13 +51,13 @@ def get_product_tool(parent_asin: str):
 @tool
 def get_recent_reviews_tool(parent_asin: str, limit: int = 10):
     """특정 제품의 최신 리뷰를 조회한다."""
-    return get_recent_reviews(parent_asin, limit)
+    return get_recent_reviews(_context_parent_asin(parent_asin), limit)
 
 
 @tool
 def get_negative_reviews_tool(parent_asin: str, limit: int = 10):
     """특정 제품의 평점 3점 이하 부정·중립 리뷰를 최신순으로 조회한다."""
-    return get_negative_reviews(parent_asin, limit)
+    return get_negative_reviews(_context_parent_asin(parent_asin), limit)
 
 
 @tool
@@ -62,7 +69,7 @@ def get_helpful_reviews_tool(
 ):
     """특정 제품에서 공감 투표가 많은 리뷰를 조회한다."""
     return get_helpful_reviews(
-        parent_asin=parent_asin,
+        parent_asin=_context_parent_asin(parent_asin),
         limit=limit,
         rating_max=rating_max,
         min_helpful_votes=min_helpful_votes,
@@ -72,7 +79,7 @@ def get_helpful_reviews_tool(
 @tool
 def get_rating_distribution_tool(parent_asin: str):
     """특정 제품의 1~5점 평점별 리뷰 수를 조회한다."""
-    return get_rating_distribution(parent_asin)
+    return get_rating_distribution(_context_parent_asin(parent_asin))
 
 
 @tool
@@ -86,7 +93,7 @@ def get_reviews_by_date_tool(
 ):
     """특정 날짜 범위의 리뷰를 조회한다. 종료일은 포함하지 않는다."""
     return get_reviews_by_date(
-        parent_asin=parent_asin,
+        parent_asin=_context_parent_asin(parent_asin),
         start_at=start_at,
         end_at=end_at,
         rating_max=rating_max,
@@ -103,7 +110,7 @@ def get_monthly_review_trend_tool(
 ):
     """특정 제품의 월별 리뷰 수, 평균 평점, 부정 비율을 조회한다."""
     return get_monthly_review_trend(
-        parent_asin=parent_asin,
+        parent_asin=_context_parent_asin(parent_asin),
         start_at=start_at,
         end_at=end_at,
     )
@@ -128,6 +135,7 @@ def get_review_patterns_tool(
     공감 투표 내림차순으로 조회하고,
     Aspect별 패턴과 표본 선정 기준을 반환한다.
     """
+    parent_asin = _context_parent_asin(parent_asin)
     rating_max = 3
     min_helpful_votes = 1
 

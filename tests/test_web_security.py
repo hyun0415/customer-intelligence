@@ -3,15 +3,16 @@ from datetime import UTC, datetime
 import pytest
 from langchain_core.messages import ToolMessage
 
-from backend.app.config import WebSettings
 from backend.app.audit import sanitize_metadata, session_fingerprint
+from backend.app.config import WebSettings
 from backend.app.google_identity import validate_google_identity
 from backend.app.tool_events import collect_run_metadata
 from src import rag_tools
 from src.auth.access import PolicyAccessGrant, policy_access_context
+from src.auth.product_context import ProductContext, product_context
 from src.rag.models import KnowledgeSearchRequest
 from src.rag.retriever import HybridRetriever
-from src.tools import escalate_case_tool
+from src.tools import escalate_case_tool, get_product_tool
 
 
 def test_production_rejects_development_login(monkeypatch):
@@ -143,6 +144,46 @@ def test_rag_tool_injects_server_access_context(monkeypatch):
         rag_tools.search_internal_knowledge_tool.invoke({"query": "환불 조건"})
 
     assert captured["request"].access_grants == grants
+
+
+def test_product_context_overrides_policy_tool_asin(monkeypatch):
+    captured = {}
+
+    class FakeResponse:
+        def model_dump(self, **_kwargs):
+            return {"status": "no_evidence", "sources": []}
+
+    class FakeRetriever:
+        def search(self, request):
+            captured["request"] = request
+            return FakeResponse()
+
+    monkeypatch.setattr(
+        rag_tools,
+        "get_internal_knowledge_retriever",
+        lambda: FakeRetriever(),
+    )
+    with product_context(ProductContext("B00FIXED001", "선택 상품")):
+        rag_tools.search_internal_knowledge_tool.invoke(
+            {"query": "환불 조건", "parent_asin": "B00OTHER001"}
+        )
+
+    assert captured["request"].parent_asin == "B00FIXED001"
+
+
+def test_product_context_overrides_review_tool_asin(monkeypatch):
+    captured = {}
+
+    def fake_get_product(parent_asin):
+        captured["parent_asin"] = parent_asin
+        return {"parent_asin": parent_asin}
+
+    monkeypatch.setattr("src.tools.get_product", fake_get_product)
+    with product_context(ProductContext("B00FIXED001", "선택 상품")):
+        result = get_product_tool.invoke({"parent_asin": "B00OTHER001"})
+
+    assert captured["parent_asin"] == "B00FIXED001"
+    assert result["parent_asin"] == "B00FIXED001"
 
 
 def test_escalation_tool_returns_machine_readable_event():

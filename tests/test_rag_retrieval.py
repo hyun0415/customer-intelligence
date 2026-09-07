@@ -78,6 +78,15 @@ def test_filters_apply_effective_scope_to_both_channels():
     assert ["CS", "ALL_DEPARTMENTS"] in params
 
 
+def test_productless_search_only_allows_global_policies():
+    request = KnowledgeSearchRequest(query="환불 조건")
+
+    sql, _params = HybridRetriever._filters(request, NOW)
+
+    assert "NOT EXISTS" in sql
+    assert "product_dp.document_id = d.document_id" in sql
+
+
 def test_rrf_uses_best_rank_per_parent_and_deduplicates_parent():
     instance = retriever()
     first = candidate(chunk_id=1, parent_chunk_id=10, source_id="policy-a")

@@ -55,12 +55,24 @@ CREATE TABLE IF NOT EXISTS conversations (
     conversation_id UUID PRIMARY KEY,
     user_id          BIGINT NOT NULL REFERENCES app_users(user_id) ON DELETE CASCADE,
     title            TEXT NOT NULL DEFAULT '새 대화',
+    context_mode     TEXT NOT NULL DEFAULT 'general'
+                     CHECK (context_mode IN ('general', 'product')),
+    product_parent_asin TEXT REFERENCES products(parent_asin),
     created_at       TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at       TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    updated_at       TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    archived_at      TIMESTAMPTZ,
+    CHECK (
+        (context_mode = 'general' AND product_parent_asin IS NULL)
+        OR (context_mode = 'product' AND product_parent_asin IS NOT NULL)
+    )
 );
 
 CREATE INDEX IF NOT EXISTS idx_conversations_owner_updated
 ON conversations(user_id, updated_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_conversations_owner_active
+ON conversations(user_id, updated_at DESC)
+WHERE archived_at IS NULL;
 
 CREATE TABLE IF NOT EXISTS conversation_messages (
     message_id       UUID PRIMARY KEY,

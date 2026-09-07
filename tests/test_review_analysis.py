@@ -1,6 +1,5 @@
 from eval.rules.tool_checker import evaluate_required_tool_execution
 from src.analysis.review_statistics import aggregate_review_topics
-
 from src.analysis.schemas import (
     ClassifiedReview,
     ExtractedTopic,

@@ -4,6 +4,7 @@ from functools import lru_cache
 from langchain_core.tools import tool
 
 from src.auth.access import get_policy_access_grants
+from src.auth.product_context import get_product_context
 from src.rag.models import KnowledgeSearchRequest
 from src.rag.retriever import HybridRetriever
 
@@ -30,6 +31,9 @@ def search_internal_knowledge_tool(
     effective_at에 ISO 8601 날짜 또는 시각을 전달한다. 검색 결과의 status가
     no_evidence이면 정책을 추측하지 말고, policy_conflict이면 임의로 해결하지 않는다.
     """
+    active_product = get_product_context()
+    if active_product is not None:
+        parent_asin = active_product.parent_asin
     parsed_effective_at = datetime.fromisoformat(effective_at) if effective_at else None
     request = KnowledgeSearchRequest(
         query=query,

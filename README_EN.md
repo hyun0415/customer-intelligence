@@ -20,9 +20,9 @@ The project is designed to reduce the amount of manual review reading and summar
 
 - Dataset: Amazon Reviews 2023
 - Category: Beauty and Personal Care
-- Products: 555
-- Reviews: 203,648
-- Negative or neutral reviews rated 3 stars or below: 50,187
+- Products: 547
+- Reviews: 105,060
+- Negative or neutral reviews rated 3 stars or below: 25,152
 
 `rating_number` represents the total number of ratings shown in Amazon product metadata. `review_count` represents the number of review texts stored in the analysis database.
 

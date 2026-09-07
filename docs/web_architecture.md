@@ -20,6 +20,27 @@ PostgreSQL은 사용자·권한·대화의 기준 저장소이고 Redis는 만�
 5. Agent 실행 중 `search_internal_knowledge_tool`에 서버의 접근 grant가 강제된다.
 6. 답변, 정책 근거, 충돌 및 escalation을 PostgreSQL에 저장한다.
 
+상품 대화는 `context_mode=product`와 `product_parent_asin`을 대화에 저장한다.
+상품을 바꾸면 기존 문맥을 수정하지 않고 새 대화를 만든다. Backend는 저장된 ASIN을
+리뷰 Tool과 정책 Tool에 강제한다. 상품 대화의 정책 검색은 해당 상품 전용 정책과
+전 상품 공통 정책을 함께 조회하고, 일반 대화는 전 상품 공통 정책만 조회한다.
+
+첫 화면은 상품 리뷰 분석, 정책 문의, 최근 대화의 업무 진입점을 제공한다. 정책 문의
+화면에는 현재 사용자의 Collection·관할·부서 권한을 표시하지만 검색 범위는 사용자가
+변경하지 못하며 Backend의 grant가 강제된다. 대화 삭제는 `archived_at`을 기록하는
+Soft Delete이다. 사용자 목록과 조회에서는 즉시 제외하되 메시지, 정책 출처,
+Escalation과 보안 감사 이력은 보존한다.
+
+Dashboard의 Aspect 분석은 콜드 캐시에서 여러 LLM 호출이 필요하므로 장시간 HTTP
+요청으로 유지하지 않는다. Backend가 Redis에 분석 작업 상태를 저장하고 즉시 작업
+ID를 반환하며, Frontend는 완료될 때까지 짧은 상태 조회 요청을 사용한다.
+
+Agent 답변도 상품 리뷰 집계나 여러 Tool 호출로 프록시 제한보다 오래 걸릴 수 있으므로
+동일하게 장시간 HTTP 요청으로 유지하지 않는다. 메시지 요청은 Redis 작업 ID를 즉시
+반환하고, Frontend가 상태를 조회하는 동안 Backend는 답변과 출처를 PostgreSQL에
+저장한다. 기본 작업 상태 TTL은 1시간이며 실패 사유는 감사 로그에 `failure`와 상세
+원인으로 기록한다.
+
 같은 대화의 열린 escalation은 새 행을 계속 만들지 않고 기존 행의 발생 횟수와
 마지막 발생 시각을 갱신한다. Agent 답변 Markdown은 HTML을 직접 주입하지 않는
 제한된 React renderer로 표시한다.
@@ -50,7 +71,9 @@ NULL이 아니라 `ALL_COLLECTIONS`, `ALL_JURISDICTIONS`, `ALL_DEPARTMENTS`로 �
 ## 개발 실행
 
 1. 신규 DB에는 `sql/05_create_web_schema.sql`을 적용한다. 기존 Web DB에는
-   `sql/07_create_security_audit_log.sql`도 적용한다.
+   `sql/06_add_conversation_product_context.sql`과
+   `sql/07_create_security_audit_log.sql`,
+   `sql/08_add_conversation_archiving.sql`도 적용한다.
 2. `.env.example`을 참고해 `SESSION_SECRET`을 설정한다.
 3. Google Cloud OAuth Client에 `http://localhost:3000/api/auth/callback`을 등록하고
    `GOOGLE_OIDC_CLIENT_ID`, `GOOGLE_OIDC_CLIENT_SECRET`,

@@ -62,6 +62,10 @@ def collect_run_metadata(messages: list[Any]) -> AgentRunMetadata:
                     "metadata": {
                         "collection": source.get("collection"),
                         "authority_tier": source.get("authority_tier"),
+                        "jurisdiction": source.get("jurisdiction"),
+                        "department": source.get("department"),
+                        "parent_asins": source.get("parent_asins", []),
+                        "product_specific": source.get("product_specific", False),
                     },
                 }
     return AgentRunMetadata(status, list(sources_by_id.values()), escalation)
