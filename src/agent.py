@@ -1,3 +1,7 @@
+import logging
+from functools import lru_cache
+from time import perf_counter
+
 from dotenv import load_dotenv
 from langchain.agents import create_agent
 from langchain_core.messages import AIMessage, ToolMessage
@@ -9,16 +13,27 @@ from src.tools import AGENT_TOOLS
 
 load_dotenv()
 
+logger = logging.getLogger("customer_intelligence.agent")
 
-model_settings = ModelRoutingSettings.from_env()
 
-model = build_chat_model(ModelRole.AGENT, settings=model_settings)
-
-agent = create_agent(
-    model=model,
-    tools=AGENT_TOOLS,
-    system_prompt=SYSTEM_PROMPT,
-)
+@lru_cache(maxsize=1)
+def get_agent():
+    """API 시작을 막지 않도록 Agent graph를 첫 요청에서 한 번만 생성한다."""
+    started_at = perf_counter()
+    model_settings = ModelRoutingSettings.from_env()
+    model = build_chat_model(ModelRole.AGENT, settings=model_settings)
+    agent = create_agent(
+        model=model,
+        tools=AGENT_TOOLS,
+        system_prompt=SYSTEM_PROMPT,
+    )
+    logger.info(
+        "agent_initialized duration_ms=%.1f model=%s provider=%s",
+        (perf_counter() - started_at) * 1000,
+        model_settings.agent.model,
+        model_settings.agent.provider,
+    )
+    return agent
 
 
 def print_tool_trace(messages):
@@ -55,7 +70,7 @@ def run_agent_messages(messages: list[dict[str, str]]):
     """저장된 대화 이력을 포함해 에이전트를 실행한다."""
     if not messages:
         raise ValueError("에이전트에 전달할 메시지가 없습니다.")
-    return agent.invoke({"messages": messages})
+    return get_agent().invoke({"messages": messages})
 
 
 def extract_text(content) -> str:

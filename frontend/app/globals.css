@@ -19,6 +19,10 @@ aside { display: flex; flex-direction: column; gap: 20px; padding: 24px; border-
 .account { display: grid; gap: 4px; }
 .account p { margin: 0; }
 .logout { justify-self: start; margin-top: 8px; padding: 0; border: 0; background: transparent; color: var(--muted); text-decoration: underline; }
+.scope-warning { margin: 8px 0 0 !important; padding: 8px 10px; border-radius: 8px; background: #fff2c9; color: #735b00; font-size: 12px; }
+.role-navigation { display: grid; gap: 6px; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+.role-navigation button { text-align: left; border: 0; border-radius: 9px; padding: 10px 11px; background: transparent; color: var(--ink); }
+.role-navigation button.active { background: #dcebe2; color: var(--green); font-weight: 700; }
 aside nav { display: flex; flex-direction: column; gap: 6px; overflow: auto; }
 aside nav button { text-align: left; border: 0; border-radius: 9px; padding: 11px; background: transparent; color: var(--ink); }
 aside nav button.active { background: white; box-shadow: 0 3px 15px #274d3812; }
@@ -33,4 +37,23 @@ aside nav button.active { background: white; box-shadow: 0 3px 15px #274d3812; }
 details { margin-top: 12px; color: var(--muted); }.source { display: flex; flex-direction: column; padding: 8px 0; border-top: 1px solid var(--line); }.source span { font-size: 12px; }
 .composer { display: flex; gap: 10px; padding: 16px max(24px, calc((100% - 850px) / 2)) 24px; border-top: 1px solid var(--line); }.composer textarea { flex: 1; min-height: 64px; resize: vertical; }.composer button { align-self: stretch; min-width: 80px; }
 .empty { display: grid; place-items: center; }
-@media (max-width: 760px) { .app-shell { grid-template-columns: 1fr; grid-template-rows: auto 1fr; } aside { padding: 12px; border-right: 0; border-bottom: 1px solid var(--line); } aside nav { flex-direction: row; } .message { max-width: 94%; } }
+.operations-panel { min-width: 0; overflow: auto; background: white; }
+.operations-panel > header { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between; padding: 22px 28px; border-bottom: 1px solid var(--line); background: #ffffffee; backdrop-filter: blur(8px); }
+.operations-panel h2, .operations-panel h3 { margin: 4px 0 0; }
+.operations-panel header button, .actions button { border: 1px solid var(--line); border-radius: 8px; background: white; padding: 8px 11px; }
+.operations-list { display: grid; gap: 12px; padding: 24px 28px; }
+.operations-list.compact { padding: 0; }
+.operation-card { padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: #fafcf9; }
+.operation-card p { margin: 9px 0 0; line-height: 1.55; }
+.operation-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.role-badge { padding: 3px 8px; border-radius: 99px; background: #e1eee6; color: var(--green); font-size: 11px; font-weight: 800; }
+.actions { display: flex; gap: 8px; margin-top: 14px; }
+.actions button:disabled { cursor: default; opacity: .5; }
+.status.open { background: #ffe0dc; color: #8a2720; }.status.acknowledged { background: #fff2c9; }.status.resolved { background: #dcebe2; color: var(--green); }
+.admin-grid { display: grid; grid-template-columns: minmax(280px, .8fr) minmax(360px, 1.2fr); gap: 28px; padding: 24px 28px; }
+.audit-list { display: grid; gap: 8px; margin-top: 16px; }
+.audit-list article { padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; }
+.audit-list p { margin: 7px 0 0; overflow-wrap: anywhere; }
+.audit-outcome { margin-left: 8px; font-size: 11px; font-weight: 800; color: var(--muted); }.audit-outcome.denied, .audit-outcome.failure, .audit-outcome.timeout, .audit-outcome.unavailable { color: #a02f2f; }
+@media (max-width: 900px) { .admin-grid { grid-template-columns: 1fr; } }
+@media (max-width: 760px) { .app-shell { height: auto; min-height: 100vh; grid-template-columns: 1fr; grid-template-rows: auto 1fr; } aside { padding: 12px; border-right: 0; border-bottom: 1px solid var(--line); } aside nav, .role-navigation { display: flex; flex-direction: row; overflow: auto; } .message { max-width: 94%; } .operations-panel > header, .operations-list, .admin-grid { padding-left: 16px; padding-right: 16px; } }

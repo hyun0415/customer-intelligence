@@ -6,14 +6,21 @@ from langchain_core.messages import AIMessage
 from src.agent import extract_text, run_agent_messages
 from src.auth.access import policy_access_context
 
+from .execution import invoke_with_timeout
 from .models import AgentResponse, CurrentUser, MessageView, SourceView
 from .repository import WebRepository
 from .tool_events import collect_run_metadata
 
 
 class ConversationAgentService:
-    def __init__(self, repository: WebRepository) -> None:
+    def __init__(
+        self,
+        repository: WebRepository,
+        *,
+        timeout_seconds: float = 120,
+    ) -> None:
         self.repository = repository
+        self.timeout_seconds = timeout_seconds
 
     async def respond(
         self,
@@ -45,7 +52,7 @@ class ConversationAgentService:
             with policy_access_context(user.policy_scopes):
                 return run_agent_messages(history)
 
-        result = await asyncio.to_thread(invoke_agent)
+        result = await invoke_with_timeout(invoke_agent, self.timeout_seconds)
         answer_message = next(
             (
                 message

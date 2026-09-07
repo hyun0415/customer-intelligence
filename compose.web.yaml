@@ -14,6 +14,19 @@ services:
       RAG_RERANKER_ENABLED: "false"
     ports:
       - "127.0.0.1:8000:8000"
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/ready', timeout=3)",
+        ]
+      interval: 5s
+      timeout: 5s
+      start_period: 10s
+      retries: 12
     depends_on:
       postgres:
         condition: service_healthy
@@ -31,7 +44,8 @@ services:
     ports:
       - "127.0.0.1:3000:3000"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
 
   # 실제 GPU 환경에서는 이 서비스를 NVIDIA runtime이 설정된 별도 Host/EKS
   # GPU Node에 배치하고 VLLM_BASE_URL을 backend에 전달한다.

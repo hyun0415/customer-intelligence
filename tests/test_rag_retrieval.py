@@ -308,3 +308,25 @@ def test_evidence_gate_converts_insufficient_to_no_evidence():
     assert status == "no_evidence"
     assert accepted == []
     assert conflicts == []
+
+
+def test_empty_access_grants_return_no_evidence_without_external_calls():
+    class ForbiddenEmbeddings:
+        def embed_query(self, text):
+            raise AssertionError("권한이 없을 때 embedding을 호출하면 안 됩니다.")
+
+    instance = HybridRetriever(
+        connection_factory=lambda: None,
+        embedding_provider=ForbiddenEmbeddings(),
+        settings=RagSettings(evidence_validation_enabled=False),
+        clock=lambda: NOW,
+    )
+
+    response = instance.search(
+        KnowledgeSearchRequest(query="환불 조건", access_grants=[])
+    )
+
+    assert response.status == "no_evidence"
+    assert response.sources == []
+    assert response.retrieval["access_control"] == "denied_empty_grants"
+    assert response.retrieval["external_calls_skipped"] is True

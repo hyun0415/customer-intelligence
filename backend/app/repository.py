@@ -15,6 +15,11 @@ class WebRepository:
     def __init__(self, connection_factory: ConnectionFactory = connect) -> None:
         self.connection_factory = connection_factory
 
+    def check_connection(self) -> bool:
+        with self.connection_factory() as conn:
+            row = conn.execute("SELECT 1 AS ok").fetchone()
+            return bool(row and row["ok"] == 1)
+
     def upsert_user(
         self,
         *,

@@ -419,6 +419,24 @@ class HybridRetriever:
         if effective_at.tzinfo is None:
             effective_at = effective_at.replace(tzinfo=timezone.utc)
 
+        if request.access_grants == []:
+            return KnowledgeSearchResponse(
+                status="no_evidence",
+                query=request.query,
+                effective_at=effective_at,
+                evidence_assessment=EvidenceAssessment(
+                    status="insufficient",
+                    reason="현재 계정에 허용된 정책 검색 범위가 없습니다.",
+                    missing_information=["관리자가 부여한 정책 접근 범위"],
+                ),
+                retrieval={
+                    "access_control": "denied_empty_grants",
+                    "external_calls_skipped": True,
+                    "fts_candidates": 0,
+                    "vector_candidates": 0,
+                },
+            )
+
         query_embedding = self.embedding_provider.embed_query(request.query)
         if len(query_embedding) != self.settings.embedding_dimensions:
             raise ValueError("질문 embedding 차원이 DB 설정과 다릅니다.")

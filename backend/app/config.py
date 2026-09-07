@@ -29,6 +29,7 @@ class WebSettings:
     oidc_redirect_uri: str | None
     google_workspace_domains: tuple[str, ...]
     bootstrap_admin_emails: tuple[str, ...]
+    agent_request_timeout_seconds: float
 
     @property
     def oidc_enabled(self) -> bool:
@@ -84,6 +85,9 @@ class WebSettings:
             oidc_redirect_uri=os.getenv("GOOGLE_OIDC_REDIRECT_URI") or os.getenv("OIDC_REDIRECT_URI"),
             google_workspace_domains=workspace_domains,
             bootstrap_admin_emails=admin_emails,
+            agent_request_timeout_seconds=float(
+                os.getenv("AGENT_REQUEST_TIMEOUT_SECONDS", "120")
+            ),
         )
         settings.validate()
         return settings
@@ -104,3 +108,5 @@ class WebSettings:
             raise ValueError("OIDC issuer, client id, client secret을 모두 설정해야 합니다.")
         if self.google_workspace_domains and self.oidc_provider != "google":
             raise ValueError("GOOGLE_WORKSPACE_DOMAINS는 Google OIDC에서만 사용할 수 있습니다.")
+        if self.agent_request_timeout_seconds <= 0:
+            raise ValueError("AGENT_REQUEST_TIMEOUT_SECONDS는 0보다 커야 합니다.")

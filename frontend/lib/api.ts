@@ -3,6 +3,14 @@ export type User = {
   email: string;
   display_name: string;
   role: "employee" | "manager" | "admin";
+  is_active: boolean;
+  policy_scopes: PolicyScope[];
+};
+
+export type PolicyScope = {
+  collection: string;
+  jurisdiction: string;
+  department: string;
 };
 
 export type Source = {
@@ -29,22 +37,86 @@ export type Conversation = {
   messages?: Message[];
 };
 
+export type Escalation = {
+  escalation_id: string;
+  conversation_id: string;
+  email: string;
+  category: string;
+  reason: string;
+  status: "open" | "acknowledged" | "resolved";
+  occurrence_count: number;
+  last_occurred_at: string;
+};
+
+export type SecurityAuditEvent = {
+  audit_event_id: string;
+  occurred_at: string;
+  event_type: string;
+  outcome: string;
+  actor_user_id?: number;
+  request_id: string;
+  resource_type?: string;
+  resource_id?: string;
+};
+
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+    public readonly requestId?: string,
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+
+  get retryable() {
+    return this.status === 0 || this.status === 429 || this.status >= 500;
+  }
+}
+
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, {
-    ...init,
-    credentials: "include",
-    headers: { "Content-Type": "application/json", ...init?.headers },
-  });
+  // Agent POST를 자동 재시도하면 질문이 중복 저장될 수 있으므로, timeout 시
+  // 입력을 복원하고 사용자가 명시적으로 재시도하도록 한다.
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 130_000);
+  let response: Response;
+  try {
+    response = await fetch(path, {
+      ...init,
+      credentials: "include",
+      signal: init?.signal ?? controller.signal,
+      headers: { "Content-Type": "application/json", ...init?.headers },
+    });
+  } catch (reason) {
+    if (reason instanceof DOMException && reason.name === "AbortError") {
+      throw new ApiError(
+        "응답 대기 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.",
+        0,
+      );
+    }
+    throw new ApiError(
+      "서버에 연결할 수 없습니다. 네트워크 상태를 확인한 뒤 다시 시도해 주세요.",
+      0,
+    );
+  } finally {
+    window.clearTimeout(timeout);
+  }
   if (!response.ok) {
     const payload = await response.json().catch(() => null);
     const detail = payload?.detail;
     const message =
       typeof detail === "string"
         ? detail
+        : detail && typeof detail.message === "string"
+          ? detail.message
         : Array.isArray(detail)
           ? detail.map((item) => item?.msg ?? JSON.stringify(item)).join(", ")
           : `요청 실패 (${response.status})`;
-    throw new Error(message);
+    throw new ApiError(
+      message,
+      response.status,
+      response.headers.get("X-Request-ID") ?? payload?.request_id,
+    );
   }
   if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
