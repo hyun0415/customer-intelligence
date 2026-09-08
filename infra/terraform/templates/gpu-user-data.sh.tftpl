@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if command -v apt-get >/dev/null 2>&1; then
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update
+  apt-get install -y docker.io git jq
+elif command -v dnf >/dev/null 2>&1; then
+  dnf install -y docker git jq
+fi
+
+systemctl enable --now docker
+systemctl enable --now amazon-ssm-agent 2>/dev/null || true
+
+for account in ubuntu ec2-user ssm-user; do
+  if id "$account" >/dev/null 2>&1; then
+    usermod -aG docker "$account"
+  fi
+done
+
+mkdir -p /opt/customer-intelligence/model-cache
+chmod 0775 /opt/customer-intelligence/model-cache
+
+cat >/usr/local/bin/ci-vllm-run <<'SCRIPT'
+#!/usr/bin/env bash
+set -euo pipefail
+
+MODEL="$${1:?Usage: ci-vllm-run MODEL_ID [MAX_MODEL_LEN]}"
+MAX_MODEL_LEN="$${2:-8192}"
+GPU_MEMORY_UTILIZATION="$${GPU_MEMORY_UTILIZATION:-0.90}"
+
+docker rm -f customer-intelligence-vllm >/dev/null 2>&1 || true
+docker run -d \
+  --name customer-intelligence-vllm \
+  --restart unless-stopped \
+  --gpus all \
+  --ipc=host \
+  -p 8000:8000 \
+  -v /opt/customer-intelligence/model-cache:/root/.cache/huggingface \
+  -e HF_TOKEN \
+  "${vllm_image}" \
+  --model "$${MODEL}" \
+  --host 0.0.0.0 \
+  --port 8000 \
+  --max-model-len "$${MAX_MODEL_LEN}" \
+  --gpu-memory-utilization "$${GPU_MEMORY_UTILIZATION}"
+SCRIPT
+chmod +x /usr/local/bin/ci-vllm-run
+
+cat >/usr/local/bin/ci-vllm-stop <<'SCRIPT'
+#!/usr/bin/env bash
+set -euo pipefail
+docker rm -f customer-intelligence-vllm >/dev/null 2>&1 || true
+SCRIPT
+chmod +x /usr/local/bin/ci-vllm-stop
+
+{
+  echo "GPU host bootstrap completed."
+  nvidia-smi || true
+  echo "No model was downloaded or started automatically."
+} >/opt/customer-intelligence/READY.txt

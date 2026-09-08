@@ -15,6 +15,7 @@ import {
 import { MessageContent } from "../components/MessageContent";
 import { Dashboard } from "../components/Dashboard";
 import { HomeDashboard } from "../components/HomeDashboard";
+import { TrashIcon } from "../components/Icons";
 
 const statusLabel: Record<string, string> = {
   no_evidence: "근거 부족",
@@ -170,7 +171,7 @@ export default function Home() {
     }
   }
 
-  async function createGeneralConversation(initialQuestion = "") {
+  async function createPolicyConversation(initialQuestion = "") {
     setError("");
     try {
       const created = await api<Conversation>("/api/conversations", {
@@ -186,12 +187,13 @@ export default function Home() {
     }
   }
 
-  async function newConversation() {
-    await createGeneralConversation();
+  async function startPolicyConversation(initialQuestion: string) {
+    await createPolicyConversation(initialQuestion);
   }
 
-  async function startPolicyConversation(initialQuestion: string) {
-    await createGeneralConversation(initialQuestion);
+  async function startFreshPolicyConversation() {
+    if (question.trim() && !window.confirm("작성 중인 질문을 지우고 새 정책 대화를 시작할까요?")) return;
+    await startPolicyConversation("");
   }
 
   async function startProductConversation(product: DashboardProduct) {
@@ -358,11 +360,9 @@ export default function Home() {
           )}
           <button className="logout" onClick={logout}>로그아웃</button>
         </div>
-        <button className="primary" onClick={newConversation}>+ 새 대화</button>
         <div className="role-navigation">
           <button className={view === "home" ? "active" : ""} onClick={() => { setError(""); setView("home"); }}>홈</button>
           <button className={view === "dashboard" ? "active" : ""} onClick={() => { setError(""); setView("dashboard"); }}>상품 분석</button>
-          <button disabled={user.policy_scopes.length === 0} onClick={() => startPolicyConversation("")}>정책 문의</button>
           {(user.role === "manager" || user.role === "admin") && (
             <button className={view === "escalations" ? "active" : ""} onClick={() => openOperations("escalations")}>Escalation</button>
           )}
@@ -377,7 +377,7 @@ export default function Home() {
                 <strong>{conversation.title}</strong>
                 {conversation.context_mode === "product" && <span className="conversation-product">{conversation.product_store || "상품"} · {conversation.product_parent_asin}</span>}
               </button>
-              <button className="conversation-delete" disabled={loading && active?.conversation_id === conversation.conversation_id} aria-label={`${conversation.title} 대화 삭제`} title="대화 삭제" onClick={() => archiveConversation(conversation.conversation_id)}>×</button>
+              <button className="conversation-delete" disabled={loading && active?.conversation_id === conversation.conversation_id} aria-label={`${conversation.title} 대화 삭제`} title="대화 삭제" onClick={() => archiveConversation(conversation.conversation_id)}><TrashIcon /></button>
             </div>
           ))}
         </nav>
@@ -391,7 +391,7 @@ export default function Home() {
             {active?.context_mode === "product" && <p className="chat-product-context"><span>현재 상품</span><strong>{active.product_title}</strong><small>{active.product_store || "스토어 미상"} · {active.product_parent_asin}</small></p>}
           </div>
           {active?.context_mode === "product" && <button className="secondary-button" onClick={() => setView("dashboard")}>다른 상품 선택</button>}
-          {active?.context_mode === "general" && <button className="secondary-button" onClick={() => setView("dashboard")}>상품 대화 시작</button>}
+          {active?.context_mode === "general" && <button className="secondary-button" disabled={loading || user.policy_scopes.length === 0} onClick={startFreshPolicyConversation}>새 정책 질문</button>}
         </header>
         <div className="messages">
           {(active?.messages ?? []).map((message: Message) => (
@@ -406,7 +406,7 @@ export default function Home() {
           {loading && <article className="message assistant pending-response" aria-live="polite"><span className="spinner" aria-hidden="true" /><p>{loadingStages[loadingStage]}</p></article>}
         </div>
         {active?.context_mode === "product" && <div className="suggested-questions"><span>추천 질문</span><button onClick={() => setQuestion("이 상품의 반복 불만과 개선 우선순위를 알려줘.")}>반복 불만 분석</button><button onClick={() => setQuestion("이 상품의 평점 분포와 주요 고객 반응을 알려줘.")}>평점·고객 반응</button><button onClick={() => setQuestion("이 상품에 적용되는 환불·재배송 정책을 알려줘.")}>관련 정책 확인</button></div>}
-        {active ? <form className="composer" onSubmit={submit}><textarea value={question} onChange={(event) => setQuestion(event.target.value)} placeholder={active.context_mode === "product" ? "선택한 상품의 리뷰, 개선점 또는 적용 정책을 질문하세요." : "정책 또는 상품에 대해 질문하세요."} /><button className="primary" disabled={loading}>전송</button></form> : <div className="empty"><button className="primary" onClick={newConversation}>첫 대화 시작</button></div>}
+        {active ? <form className="composer" onSubmit={submit}><textarea value={question} onChange={(event) => setQuestion(event.target.value)} placeholder={active.context_mode === "product" ? "선택한 상품의 리뷰, 개선점 또는 적용 정책을 질문하세요." : "승인된 업무 정책에 대해 질문하세요."} /><button className="primary" disabled={loading}>전송</button></form> : <div className="empty"><div><strong>홈에서 업무를 선택해 주세요.</strong><button className="secondary-button" onClick={() => setView("home")}>홈으로 이동</button></div></div>}
         {error && <p className="error banner" role="alert">{error}</p>}
       </section>}
       {view === "dashboard" && <Dashboard onError={setError} errorMessage={errorMessage} onStartProductConversation={startProductConversation} />}

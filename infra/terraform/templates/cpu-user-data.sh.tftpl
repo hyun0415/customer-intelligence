@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+dnf install -y docker git jq
+systemctl enable --now docker
+systemctl enable --now amazon-ssm-agent
+usermod -aG docker ec2-user
+
+mkdir -p /opt/customer-intelligence
+chown ec2-user:ec2-user /opt/customer-intelligence
+
+mkdir -p /usr/local/lib/docker/cli-plugins
+curl -fsSL "https://github.com/docker/compose/releases/download/${docker_compose_version}/docker-compose-linux-x86_64" \
+  -o /usr/local/lib/docker/cli-plugins/docker-compose
+chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+
+cat >/opt/customer-intelligence/READY.txt <<'EOF'
+CPU host bootstrap completed.
+Transfer the repository and a production .env through an approved private path.
+Do not store secrets in Terraform state or user-data.
+EOF

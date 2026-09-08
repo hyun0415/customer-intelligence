@@ -268,3 +268,10 @@ python -m eval.export_colab_rerank_input
 로컬의 full 단계 결과와 결합해 근거 판정 전후를 비교할 수 있습니다.
 
 자세한 설계 근거는 [ADR-001](docs/adr/001-hybrid-sql-rag-architecture.md)을 참고하세요.
+
+## AWS 검증 환경
+
+모노레포의 배포 검증용 Terraform은 `infra/terraform`에 있습니다. CPU EC2에는
+Web·API·PostgreSQL·Redis를, GPU EC2에는 vLLM을 분리하며 기본값에서는 어떤 AWS
+리소스도 생성하지 않습니다. 준비 절차와 비용 안전장치는
+[Terraform 안내](infra/terraform/README.md)를 참고하세요.

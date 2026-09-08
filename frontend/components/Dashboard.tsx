@@ -8,6 +8,7 @@ import {
   DashboardProductDetail,
   ReviewPatternResult,
 } from "../lib/api";
+import { CheckIcon, SearchIcon } from "./Icons";
 
 type Props = {
   onError: (message: string) => void;
@@ -29,6 +30,7 @@ export function Dashboard({ onError, errorMessage, onStartProductConversation }:
   const [detail, setDetail] = useState<DashboardProductDetail | null>(null);
   const [patterns, setPatterns] = useState<ReviewPatternResult | null>(null);
   const [query, setQuery] = useState("");
+  const [appliedQuery, setAppliedQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [patternLoading, setPatternLoading] = useState(false);
   const [patternJobId, setPatternJobId] = useState("");
@@ -127,7 +129,15 @@ export function Dashboard({ onError, errorMessage, onStartProductConversation }:
 
   async function search(event: FormEvent) {
     event.preventDefault();
-    await loadProducts(query.trim());
+    const normalized = query.trim();
+    setAppliedQuery(normalized);
+    await loadProducts(normalized);
+  }
+
+  async function clearSearch() {
+    setQuery("");
+    setAppliedQuery("");
+    await loadProducts();
   }
 
   async function analyzePatterns() {
@@ -162,28 +172,51 @@ export function Dashboard({ onError, errorMessage, onStartProductConversation }:
         </div>
         <form className="dashboard-search" onSubmit={search}>
           <label className="sr-only" htmlFor="product-search">상품 검색</label>
-          <input
-            id="product-search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="상품명, 브랜드 또는 ASIN"
-          />
-          <button type="submit" disabled={loading}>검색</button>
+          <div className="search-field">
+            <SearchIcon />
+            <input
+              id="product-search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="상품명, 브랜드 또는 ASIN"
+            />
+            {query && <button className="search-clear" type="button" onClick={clearSearch} aria-label="검색어 지우기" title="검색어 지우기">×</button>}
+          </div>
+          <button className="search-submit" type="submit" disabled={loading}>{loading ? "확인 중" : "검색"}</button>
         </form>
       </header>
 
       <div className="dashboard-content">
+        {!loading && (
+          <div className="search-summary" role="status">
+            <div>
+              <strong>{appliedQuery ? `“${appliedQuery}” 검색 결과` : "분석 가능한 상품"}</strong>
+              <span>{products.length}개 상품</span>
+            </div>
+            {appliedQuery && <button type="button" onClick={clearSearch}>전체 상품 보기</button>}
+          </div>
+        )}
         {products.length > 0 && (
           <section className="product-strip" aria-label="분석할 상품 선택">
             {products.map((product) => (
               <button
+                type="button"
                 key={product.parent_asin}
                 className={selected === product.parent_asin ? "active" : ""}
+                aria-pressed={selected === product.parent_asin}
                 onClick={() => loadDetail(product.parent_asin)}
               >
-                <span>{product.store || "브랜드 미상"}</span>
-                <strong>{product.title}</strong>
-                <small>{formatNumber(product.review_count)}개 리뷰</small>
+                <div className="product-result-heading">
+                  <span className="product-result-store">{product.store || "브랜드 미상"}</span>
+                  {selected === product.parent_asin && <span className="selected-product-badge"><CheckIcon /> 선택됨</span>}
+                </div>
+                <strong className="product-result-title">{product.title}</strong>
+                <span className="product-result-asin">ASIN {product.parent_asin}</span>
+                <div className="product-result-metrics">
+                  <span><StarIcon /> {product.average_rating?.toFixed(2) ?? "-"}</span>
+                  <span>리뷰 {formatNumber(product.review_count)}개</span>
+                  <span className="negative">1~3점 {product.negative_ratio.toFixed(1)}%</span>
+                </div>
               </button>
             ))}
           </section>
@@ -354,12 +387,13 @@ export function Dashboard({ onError, errorMessage, onStartProductConversation }:
                 {detail.representative_reviews.map((review) => (
                   <article key={review.review_id}>
                     <div className="review-meta">
+                      <span className="review-evidence-label">대표 근거 리뷰</span>
                       <span className="review-rating"><StarIcon /> {review.rating}</span>
                       <span>공감 {formatNumber(review.helpful_vote)}</span>
                       {review.verified_purchase && <span>구매 인증</span>}
                     </div>
-                    <strong>{review.review_title || "제목 없는 리뷰"}</strong>
-                    <p>{review.review_text || "리뷰 본문이 없습니다."}</p>
+                    <strong title={review.review_title || "제목 없는 리뷰"}>{review.review_title || "제목 없는 리뷰"}</strong>
+                    <p title={review.review_text || "리뷰 본문이 없습니다."}>{review.review_text || "리뷰 본문이 없습니다."}</p>
                   </article>
                 ))}
               </div>
