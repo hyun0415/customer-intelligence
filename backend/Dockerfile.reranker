@@ -2,7 +2,7 @@ FROM vllm/vllm-openai:v0.28.0
 
 WORKDIR /app
 COPY requirements-rag-rerank.txt ./
-RUN python -m pip install \
+RUN python3 -m pip install \
     --default-timeout=600 \
     --retries=10 \
     --prefer-binary \
@@ -17,4 +17,4 @@ ENV PYTHONPATH=/app \
 
 EXPOSE 8000
 ENTRYPOINT []
-CMD ["python", "-m", "uvicorn", "backend.reranker_main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["python3", "-m", "uvicorn", "backend.reranker_main:app", "--host", "0.0.0.0", "--port", "8000"]
