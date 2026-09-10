@@ -32,12 +32,13 @@ OpenAI-compatible vLLM Chat Completions endpoint를 사용한다. 역할별
 
 L40S 48GB 단일 GPU 검증에서는 `compose.gpu.yaml`로 세 서비스를 동시에 둔다.
 
-- `:8000`: GPT-OSS 20B 최종 Agent, GPU 예약 50%
-- `:8002`: Qwen3-8B Aspect 추출·근거 판정 공용, GPU 예약 35%
+- `:8000`: GPT-OSS 20B 최종 Agent, GPU 예약 48%
+- `:8002`: Qwen3-8B Aspect 추출·근거 판정 공용, GPU 예약 40%, 동시 요청 1개
 - `:8003`: BGE-M3 multi-vector 재정렬 API
 
 CPU FastAPI는 각 역할의 URL과 `RAG_RERANKER_BASE_URL`만 참조한다. Gemma
 Evaluator는 온라인 세 서비스를 중지한 뒤 저장된 결과를 오프라인으로 평가한다.
+두 vLLM 서비스의 총 예약은 88%로 제한해 BGE-M3와 CUDA runtime 여유를 남긴다.
 
 ## 프롬프트와 JSON 스키마
 
