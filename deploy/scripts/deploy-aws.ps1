@@ -10,9 +10,13 @@ $ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $TerraformDir = Join-Path $ProjectRoot "infra\terraform"
 if (-not $Tag) {
     $Tag = (git -C $ProjectRoot rev-parse --short=12 HEAD).Trim()
+    if ($LASTEXITCODE -ne 0) { throw "Failed to resolve the Git commit tag." }
 }
 
 $AccountId = (aws sts get-caller-identity --profile $AwsProfile --query Account --output text).Trim()
+if ($LASTEXITCODE -ne 0 -or -not $AccountId) {
+    throw "Failed to resolve the AWS account for profile '$AwsProfile'."
+}
 $Registry = "$AccountId.dkr.ecr.$Region.amazonaws.com"
 $InstanceOutput = if ($Target -eq "gpu") { "gpu_instance_id" } else { "cpu_instance_id" }
 $TerraformChdir = "-chdir=$TerraformDir"
@@ -54,8 +58,12 @@ $RequestPath = Join-Path ([IO.Path]::GetTempPath()) "ci-ssm-$([guid]::NewGuid())
 try {
     [IO.File]::WriteAllText($RequestPath, $Request, [Text.UTF8Encoding]::new($false))
     $CommandId = (aws ssm send-command --cli-input-json "file://$RequestPath" --profile $AwsProfile --region $Region --query "Command.CommandId" --output text).Trim()
+    if ($LASTEXITCODE -ne 0 -or -not $CommandId) { throw "SSM command dispatch failed." }
     aws ssm wait command-executed --command-id $CommandId --instance-id $InstanceId --profile $AwsProfile --region $Region
+    $WaitFailed = $LASTEXITCODE -ne 0
     aws ssm get-command-invocation --command-id $CommandId --instance-id $InstanceId --profile $AwsProfile --region $Region --query "{Status:Status,Output:StandardOutputContent,Error:StandardErrorContent}"
+    if ($LASTEXITCODE -ne 0) { throw "Failed to read the SSM deployment result." }
+    if ($WaitFailed) { throw "Remote deployment failed. See the SSM error above." }
 } finally {
     Remove-Item -LiteralPath $RequestPath -Force -ErrorAction SilentlyContinue
 }
