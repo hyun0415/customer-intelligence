@@ -67,6 +67,14 @@ class RagSettings:
     reranker_device: str = field(
         default_factory=lambda: os.getenv("RAG_RERANKER_DEVICE", "cpu")
     )
+    reranker_base_url: str | None = field(
+        default_factory=lambda: os.getenv("RAG_RERANKER_BASE_URL") or None
+    )
+    reranker_timeout_seconds: float = field(
+        default_factory=lambda: float(
+            os.getenv("RAG_RERANKER_TIMEOUT_SECONDS", "60")
+        )
+    )
     reranker_batch_size: int = field(
         default_factory=lambda: int(os.getenv("RAG_RERANKER_BATCH_SIZE", "2"))
     )
@@ -113,6 +121,8 @@ class RagSettings:
             raise ValueError("최소 관련성 cosine similarity는 0~1 사이여야 합니다.")
         if self.reranker_batch_size <= 0:
             raise ValueError("reranker batch size는 양수여야 합니다.")
+        if self.reranker_timeout_seconds <= 0:
+            raise ValueError("reranker timeout은 양수여야 합니다.")
         if self.reranker_query_max_tokens <= 0 or self.reranker_passage_max_tokens <= 0:
             raise ValueError("reranker token 제한은 양수여야 합니다.")
         if self.evidence_timeout_seconds <= 0 or self.evidence_max_retries < 0:

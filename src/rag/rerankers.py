@@ -1,11 +1,51 @@
-from collections.abc import Sequence
+import json
+from collections.abc import Callable, Sequence
 from typing import Any, Protocol
+from urllib.parse import urljoin
+from urllib.request import Request, urlopen
 
 from .config import RagSettings
 
 
 class Reranker(Protocol):
     def score(self, query: str, passages: Sequence[str]) -> list[float]: ...
+
+
+class RemoteColbertReranker:
+    """GPU 호스트의 BGE-M3 API를 호출하는 Reranker 어댑터."""
+
+    def __init__(
+        self,
+        settings: RagSettings | None = None,
+        opener: Callable[..., Any] = urlopen,
+    ) -> None:
+        self.settings = settings or RagSettings()
+        self.settings.validate()
+        if not self.settings.reranker_base_url:
+            raise ValueError("원격 reranker에는 RAG_RERANKER_BASE_URL이 필요합니다.")
+        self._opener = opener
+
+    def score(self, query: str, passages: Sequence[str]) -> list[float]:
+        if not passages:
+            return []
+        request = Request(
+            urljoin(self.settings.reranker_base_url.rstrip("/") + "/", "rerank"),
+            data=json.dumps(
+                {"query": query, "passages": list(passages)},
+                ensure_ascii=False,
+            ).encode("utf-8"),
+            headers={"Content-Type": "application/json; charset=utf-8"},
+            method="POST",
+        )
+        with self._opener(
+            request,
+            timeout=self.settings.reranker_timeout_seconds,
+        ) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+        scores = [float(score) for score in payload.get("scores", [])]
+        if len(scores) != len(passages):
+            raise ValueError("원격 ColBERT 점수 수와 후보 문서 수가 다릅니다.")
+        return scores
 
 
 class BGEM3ColbertReranker:
@@ -30,6 +70,7 @@ class BGEM3ColbertReranker:
         self._model = BGEM3FlagModel(
             self.settings.reranker_model,
             devices=self.settings.reranker_device,
+            use_fp16=self.settings.reranker_device.startswith("cuda"),
         )
         return self._model
 

@@ -26,6 +26,14 @@ output "cpu_to_gpu_vllm_base_url" {
   value = local.create_cpu && local.create_gpu ? "http://${aws_instance.gpu[0].private_ip}:8000/v1" : null
 }
 
+output "cpu_to_gpu_structured_base_url" {
+  value = local.create_cpu && local.create_gpu ? "http://${aws_instance.gpu[0].private_ip}:8002/v1" : null
+}
+
+output "cpu_to_gpu_reranker_base_url" {
+  value = local.create_cpu && local.create_gpu ? "http://${aws_instance.gpu[0].private_ip}:8003" : null
+}
+
 output "access_note" {
   value = "No inbound ports are public. Use AWS Systems Manager Session Manager or port forwarding."
 }

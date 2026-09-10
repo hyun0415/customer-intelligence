@@ -76,15 +76,21 @@ variable "cpu_root_volume_gib" {
 }
 
 variable "gpu_ami_id" {
-  description = "Region-specific AWS Deep Learning GPU AMI ID. Required only when create_gpu_instance is true."
+  description = "Optional region-specific Deep Learning GPU AMI ID override. When empty, gpu_ami_ssm_parameter is used."
   type        = string
   default     = ""
 }
 
-variable "gpu_instance_type" {
-  description = "Use p5.4xlarge for one H100 80GB, or a supported alternative for quantized validation."
+variable "gpu_ami_ssm_parameter" {
+  description = "AWS public SSM parameter for the latest x86_64 Deep Learning Base GPU AMI."
   type        = string
-  default     = "p5.4xlarge"
+  default     = "/aws/service/deeplearning/ami/x86_64/base-oss-nvidia-driver-gpu-ubuntu-22.04/latest/ami-id"
+}
+
+variable "gpu_instance_type" {
+  description = "GPU host size for sequential local-model validation."
+  type        = string
+  default     = "g6e.2xlarge"
 }
 
 variable "gpu_root_volume_gib" {
@@ -106,7 +112,7 @@ variable "gpu_use_spot" {
 variable "vllm_image" {
   description = "vLLM container image. Pin this to a tested tag or digest before recording benchmark results."
   type        = string
-  default     = "vllm/vllm-openai:latest"
+  default     = "vllm/vllm-openai:v0.28.0"
 }
 
 variable "docker_compose_version" {
@@ -122,8 +128,8 @@ variable "tags" {
 
 check "gpu_ami_is_set" {
   assert {
-    condition     = !var.enable_stack || !var.create_gpu_instance || can(regex("^ami-[0-9a-f]+$", var.gpu_ami_id))
-    error_message = "Set gpu_ami_id to a Deep Learning GPU AMI in aws_region before enabling the GPU instance."
+    condition     = var.gpu_ami_id == "" || can(regex("^ami-[0-9a-f]+$", var.gpu_ami_id))
+    error_message = "gpu_ami_id must be empty or a valid AMI ID."
   }
 }
 

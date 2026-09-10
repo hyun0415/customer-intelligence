@@ -48,10 +48,9 @@ def build_chat_model(
                 "base_url": config.base_url,
                 "api_key": config.api_key,
                 "use_responses_api": False,
+                "temperature": 0.0,
             }
         )
-        if config.structured_output:
-            kwargs["temperature"] = 0.0
         if config.disable_thinking:
             kwargs["extra_body"] = {
                 "chat_template_kwargs": {"enable_thinking": False}

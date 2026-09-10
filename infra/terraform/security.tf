@@ -42,7 +42,7 @@ resource "aws_vpc_security_group_ingress_rule" "gpu_from_cpu" {
   security_group_id            = aws_security_group.gpu[0].id
   referenced_security_group_id = aws_security_group.cpu[0].id
   from_port                    = 8000
-  to_port                      = 8000
+  to_port                      = 8003
   ip_protocol                  = "tcp"
-  description                  = "OpenAI-compatible vLLM endpoint from the CPU application host"
+  description                  = "Agent, structured model, and reranker endpoints from the CPU host"
 }

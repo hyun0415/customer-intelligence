@@ -6,12 +6,19 @@
 |---|---|---|
 | Aspect Extractor | `Qwen/Qwen3-8B` | `ClassifiedReview` JSON |
 | 근거 유효성 판정 | `Qwen/Qwen3-8B` | `EvidenceAssessment` JSON |
-| 최종 Agent | `Qwen/Qwen3-30B-A3B-Instruct-2507` | Tool Calling + 근거 기반 자연어 |
-| Evaluator | `google/gemma-3-27b-it` | `JudgeResult` JSON |
+| 최종 Agent | `openai/gpt-oss-20b` | Tool Calling + 근거 기반 자연어 |
+| Evaluator | `pytorch/gemma-3-27b-it-FP8` | `JudgeResult` JSON |
 
-Qwen3-8B 구조화 역할은 non-thinking으로 실행한다. 최종 Agent 모델은
-Instruct-2507의 non-thinking 동작을 사용한다. Evaluator는 Agent와 다른 Gemma
+Qwen3-8B 구조화 역할은 non-thinking으로 실행한다. 최종 Agent는 GPT-OSS의
+Tool Calling과 reasoning parser를 사용한다. Evaluator는 Agent와 다른 Gemma
 계열을 사용해 동일 모델 자기평가 편향을 줄인다.
+
+최종 Agent는 vLLM의 OpenAI Tool Parser와 16,384 token 컨텍스트를 사용한다.
+8,192 token에서는 공통 시스템 프롬프트, Tool schema와 Tool 결과가 출력 공간을
+소진할 수 있다. 로컬 Agent는 temperature 0으로 실행한다. OpenAI와 로컬 Agent
+모두 동일한 응답 계약을 사용하며, 단일 결정론 Tool로 완료되는 SQL 집계 답변은
+모델 자유 서술 대신 Python이 검증된 Tool 결과로 확정한다. 여러 Tool의 근거를
+종합하거나 원인·개선안 해석이 필요한 경우에는 LLM의 근거 기반 설명을 유지한다.
 
 ## Provider 전환
 
@@ -22,6 +29,15 @@ OpenAI-compatible vLLM Chat Completions endpoint를 사용한다. 역할별
 
 구체적인 환경변수 예시는 프로젝트의 `.env.example`을 참고한다. 모델 호출부는
 `src/model_clients.py`, 역할별 설정은 `src/model_config.py`에서 관리한다.
+
+L40S 48GB 단일 GPU 검증에서는 `compose.gpu.yaml`로 세 서비스를 동시에 둔다.
+
+- `:8000`: GPT-OSS 20B 최종 Agent, GPU 예약 50%
+- `:8002`: Qwen3-8B Aspect 추출·근거 판정 공용, GPU 예약 35%
+- `:8003`: BGE-M3 multi-vector 재정렬 API
+
+CPU FastAPI는 각 역할의 URL과 `RAG_RERANKER_BASE_URL`만 참조한다. Gemma
+Evaluator는 온라인 세 서비스를 중지한 뒤 저장된 결과를 오프라인으로 평가한다.
 
 ## 프롬프트와 JSON 스키마
 

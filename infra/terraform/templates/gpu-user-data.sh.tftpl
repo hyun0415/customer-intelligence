@@ -4,9 +4,15 @@ set -euo pipefail
 if command -v apt-get >/dev/null 2>&1; then
   export DEBIAN_FRONTEND=noninteractive
   apt-get update
-  apt-get install -y docker.io git jq
+  apt-get install -y git jq
+  if ! command -v docker >/dev/null 2>&1; then
+    apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  fi
 elif command -v dnf >/dev/null 2>&1; then
-  dnf install -y docker git jq
+  dnf install -y git jq
+  if ! command -v docker >/dev/null 2>&1; then
+    dnf install -y docker
+  fi
 fi
 
 systemctl enable --now docker
@@ -21,15 +27,42 @@ done
 mkdir -p /opt/customer-intelligence/model-cache
 chmod 0775 /opt/customer-intelligence/model-cache
 
+cat >/usr/local/bin/ci-model-stop <<'SCRIPT'
+#!/usr/bin/env bash
+set -euo pipefail
+docker rm -f customer-intelligence-vllm >/dev/null 2>&1 || true
+docker rm -f customer-intelligence-bge-m3 >/dev/null 2>&1 || true
+SCRIPT
+chmod +x /usr/local/bin/ci-model-stop
+
+cat >/usr/local/bin/ci-vllm-stop <<'SCRIPT'
+#!/usr/bin/env bash
+set -euo pipefail
+docker rm -f customer-intelligence-vllm >/dev/null 2>&1 || true
+SCRIPT
+chmod +x /usr/local/bin/ci-vllm-stop
+
+cat >/usr/local/bin/ci-bge-m3-stop <<'SCRIPT'
+#!/usr/bin/env bash
+set -euo pipefail
+docker rm -f customer-intelligence-bge-m3 >/dev/null 2>&1 || true
+SCRIPT
+chmod +x /usr/local/bin/ci-bge-m3-stop
+
 cat >/usr/local/bin/ci-vllm-run <<'SCRIPT'
 #!/usr/bin/env bash
 set -euo pipefail
 
-MODEL="$${1:?Usage: ci-vllm-run MODEL_ID [MAX_MODEL_LEN]}"
+MODEL="$${1:?Usage: ci-vllm-run MODEL_ID [MAX_MODEL_LEN] [VLLM_ARGS...]}"
 MAX_MODEL_LEN="$${2:-8192}"
+if [ "$${#}" -ge 2 ]; then
+  shift 2
+else
+  shift "$${#}"
+fi
 GPU_MEMORY_UTILIZATION="$${GPU_MEMORY_UTILIZATION:-0.90}"
 
-docker rm -f customer-intelligence-vllm >/dev/null 2>&1 || true
+ci-vllm-stop
 docker run -d \
   --name customer-intelligence-vllm \
   --restart unless-stopped \
@@ -43,19 +76,78 @@ docker run -d \
   --host 0.0.0.0 \
   --port 8000 \
   --max-model-len "$${MAX_MODEL_LEN}" \
-  --gpu-memory-utilization "$${GPU_MEMORY_UTILIZATION}"
+  --gpu-memory-utilization "$${GPU_MEMORY_UTILIZATION}" \
+  --max-num-seqs 4 \
+  "$${@}"
 SCRIPT
 chmod +x /usr/local/bin/ci-vllm-run
 
-cat >/usr/local/bin/ci-vllm-stop <<'SCRIPT'
+cat >/usr/local/bin/ci-model-run <<'SCRIPT'
 #!/usr/bin/env bash
 set -euo pipefail
-docker rm -f customer-intelligence-vllm >/dev/null 2>&1 || true
+
+PROFILE="$${1:?Usage: ci-model-run aspect|evidence|agent|evaluator}"
+
+case "$${PROFILE}" in
+  aspect|evidence)
+    MODEL="Qwen/Qwen3-8B"
+    MAX_MODEL_LEN=8192
+    MODEL_ARGS=(--dtype bfloat16)
+    ;;
+  agent)
+    MODEL="openai/gpt-oss-20b"
+    MAX_MODEL_LEN=16384
+    GPU_MEMORY_UTILIZATION=0.50
+    MODEL_ARGS=(--enable-auto-tool-choice --tool-call-parser openai --reasoning-parser openai_gptoss)
+    ;;
+  evaluator)
+    MODEL="pytorch/gemma-3-27b-it-FP8"
+    MAX_MODEL_LEN=8192
+    MODEL_ARGS=()
+    ;;
+  *)
+    echo "Unknown profile: $${PROFILE}" >&2
+    exit 2
+    ;;
+esac
+
+echo "Starting $${PROFILE}: $${MODEL} (max context: $${MAX_MODEL_LEN})"
+GPU_MEMORY_UTILIZATION="$${GPU_MEMORY_UTILIZATION:-0.90}" \
+  ci-vllm-run "$${MODEL}" "$${MAX_MODEL_LEN}" "$${MODEL_ARGS[@]}"
 SCRIPT
-chmod +x /usr/local/bin/ci-vllm-stop
+chmod +x /usr/local/bin/ci-model-run
+
+cat >/usr/local/bin/ci-bge-m3-smoke <<'SCRIPT'
+#!/usr/bin/env bash
+set -euo pipefail
+
+IMAGE="$${CI_RERANKER_IMAGE:-customer-intelligence-backend:reranker}"
+if ! docker image inspect "$${IMAGE}" >/dev/null 2>&1; then
+  echo "Missing $${IMAGE}. Build the backend runtime-reranker target after transferring the monorepo." >&2
+  exit 2
+fi
+
+ci-bge-m3-stop
+docker run --rm \
+  --name customer-intelligence-bge-m3 \
+  --gpus all \
+  -v /opt/customer-intelligence/model-cache:/root/.cache/huggingface \
+  -e HF_TOKEN \
+  "$${IMAGE}" \
+  python -c 'from FlagEmbedding import BGEM3FlagModel; model=BGEM3FlagModel("BAAI/bge-m3", use_fp16=True, device="cuda"); out=model.encode(["배송 중 상품이 파손되었습니다."], return_dense=False, return_sparse=False, return_colbert_vecs=True, max_length=2048); print("BGE-M3 FP16 ColBERT vectors:", out["colbert_vecs"][0].shape)'
+SCRIPT
+chmod +x /usr/local/bin/ci-bge-m3-smoke
+
+cat >/usr/local/bin/ci-model-status <<'SCRIPT'
+#!/usr/bin/env bash
+set -euo pipefail
+nvidia-smi
+docker ps --filter name=customer-intelligence --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}'
+SCRIPT
+chmod +x /usr/local/bin/ci-model-status
 
 {
   echo "GPU host bootstrap completed."
   nvidia-smi || true
-  echo "No model was downloaded or started automatically."
+  echo "No model was downloaded or started automatically. Use ci-model-run or ci-bge-m3-smoke."
 } >/opt/customer-intelligence/READY.txt

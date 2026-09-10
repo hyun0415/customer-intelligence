@@ -44,6 +44,8 @@ def test_model_routing_defaults_are_role_specific(monkeypatch):
 
 
 def test_model_routing_overrides_are_independent(monkeypatch):
+    for name in MODEL_ENV_NAMES:
+        monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("OPENAI_MODEL", "agent-model")
     monkeypatch.setenv("REVIEW_EXTRACTOR_MODEL", "aspect-model")
     monkeypatch.setenv("RAG_EVIDENCE_MODEL", "evidence-model")
@@ -59,7 +61,7 @@ def test_model_routing_overrides_are_independent(monkeypatch):
     assert LLMJudge(client=object()).model == "judge-model"
 
 
-def test_vllm_defaults_select_qwen_and_gemma(monkeypatch):
+def test_vllm_defaults_select_gpt_oss_qwen_and_gemma(monkeypatch):
     for name in MODEL_ENV_NAMES:
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("MODEL_PROVIDER", "vllm")
@@ -67,10 +69,10 @@ def test_vllm_defaults_select_qwen_and_gemma(monkeypatch):
 
     settings = ModelRoutingSettings.from_env()
 
-    assert settings.agent.model == "Qwen/Qwen3-30B-A3B-Instruct-2507"
+    assert settings.agent.model == "openai/gpt-oss-20b"
     assert settings.aspect_extractor.model == "Qwen/Qwen3-8B"
     assert settings.evidence.model == "Qwen/Qwen3-8B"
-    assert settings.evaluator.model == "google/gemma-3-27b-it"
+    assert settings.evaluator.model == "pytorch/gemma-3-27b-it-FP8"
     assert settings.aspect_extractor.disable_thinking is True
     assert settings.evaluator.base_url == "http://inference.test/v1"
 
@@ -124,6 +126,18 @@ def test_vllm_client_uses_chat_completions_and_disables_qwen_thinking(
     assert client.kwargs["extra_body"] == {
         "chat_template_kwargs": {"enable_thinking": False}
     }
+
+
+def test_vllm_agent_uses_deterministic_sampling(monkeypatch):
+    for name in MODEL_ENV_NAMES:
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("MODEL_PROVIDER", "vllm")
+    monkeypatch.setattr(model_clients, "ChatOpenAI", FakeChatOpenAI)
+
+    client = build_chat_model(ModelRole.AGENT)
+
+    assert client.kwargs["temperature"] == 0.0
+    assert "extra_body" not in client.kwargs
 
 
 def test_structured_roles_use_strict_json_schema(monkeypatch):

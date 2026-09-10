@@ -8,7 +8,8 @@ from langchain_core.messages import AIMessage, ToolMessage
 
 from src.model_clients import build_chat_model
 from src.model_config import ModelRole, ModelRoutingSettings
-from src.prompts import SYSTEM_PROMPT
+from src.prompts import build_agent_system_prompt
+from src.response_contract import apply_response_contract
 from src.tools import AGENT_TOOLS
 
 load_dotenv()
@@ -25,7 +26,7 @@ def get_agent():
     agent = create_agent(
         model=model,
         tools=AGENT_TOOLS,
-        system_prompt=SYSTEM_PROMPT,
+        system_prompt=build_agent_system_prompt(),
     )
     logger.info(
         "agent_initialized duration_ms=%.1f model=%s provider=%s",
@@ -70,7 +71,8 @@ def run_agent_messages(messages: list[dict[str, str]]):
     """저장된 대화 이력을 포함해 에이전트를 실행한다."""
     if not messages:
         raise ValueError("에이전트에 전달할 메시지가 없습니다.")
-    return get_agent().invoke({"messages": messages})
+    result = get_agent().invoke({"messages": messages})
+    return apply_response_contract(result)
 
 
 def extract_text(content) -> str:

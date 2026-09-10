@@ -1,10 +1,11 @@
+import json
 from datetime import datetime, timezone
 
 import pytest
 
 from src.rag.config import RagSettings
 from src.rag.models import EvidenceAssessment, KnowledgeSearchRequest, KnowledgeSource
-from src.rag.rerankers import BGEM3ColbertReranker
+from src.rag.rerankers import BGEM3ColbertReranker, RemoteColbertReranker
 from src.rag.retriever import HybridRetriever
 
 NOW = datetime(2026, 9, 1, tzinfo=timezone.utc)
@@ -262,6 +263,53 @@ def test_bge_m3_reranker_uses_only_colbert_mode():
     assert scores == [0.2, 0.8]
     assert instance._model.kwargs["weights_for_different_modes"] == [0.0, 0.0, 1.0]
     assert instance._model.kwargs["max_passage_length"] == 2048
+
+
+def test_remote_reranker_posts_candidates_and_returns_scores():
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return json.dumps({"scores": [0.82, 0.31]}).encode("utf-8")
+
+    def opener(request, timeout):
+        assert request.full_url == "http://reranker.test/rerank"
+        assert timeout == 7
+        assert json.loads(request.data.decode("utf-8")) == {
+            "query": "무료 재배송 횟수",
+            "passages": ["1회", "관리자 승인"],
+        }
+        return FakeResponse()
+
+    reranker = RemoteColbertReranker(
+        RagSettings(
+            reranker_base_url="http://reranker.test",
+            reranker_timeout_seconds=7,
+        ),
+        opener=opener,
+    )
+
+    assert reranker.score("무료 재배송 횟수", ["1회", "관리자 승인"]) == [
+        0.82,
+        0.31,
+    ]
+
+
+def test_hybrid_retriever_selects_remote_reranker_when_url_is_set():
+    instance = HybridRetriever(
+        connection_factory=lambda: None,
+        embedding_provider=FakeEmbeddings(),
+        settings=RagSettings(
+            reranker_base_url="http://reranker.test",
+            evidence_validation_enabled=False,
+        ),
+    )
+
+    assert isinstance(instance.reranker, RemoteColbertReranker)
 
 
 def test_evidence_assessment_schema_supports_yes_no_and_conflict():

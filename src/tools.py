@@ -79,7 +79,14 @@ def get_helpful_reviews_tool(
 @tool
 def get_rating_distribution_tool(parent_asin: str):
     """특정 제품의 1~5점 평점별 리뷰 수를 조회한다."""
-    return get_rating_distribution(_context_parent_asin(parent_asin))
+    rows = get_rating_distribution(_context_parent_asin(parent_asin))
+    return [
+        {
+            "rating": float(row["rating"]),
+            "review_count": int(row["review_count"]),
+        }
+        for row in rows
+    ]
 
 
 @tool

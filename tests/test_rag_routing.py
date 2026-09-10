@@ -1,5 +1,5 @@
 from eval.rag_questions import RAG_EVAL_CASES
-from src.prompts import SYSTEM_PROMPT
+from src.prompts import SYSTEM_PROMPT, build_agent_system_prompt
 from src.tools import AGENT_TOOLS
 
 
@@ -17,3 +17,13 @@ def test_rag_evaluation_cases_reference_registered_tools():
     registered = {agent_tool.name for agent_tool in AGENT_TOOLS}
     for case in RAG_EVAL_CASES:
         assert set(case["required_tools"]).issubset(registered)
+
+
+def test_all_agent_providers_use_common_response_contract():
+    openai_prompt = build_agent_system_prompt("openai")
+    local_prompt = build_agent_system_prompt("vllm")
+
+    assert openai_prompt == local_prompt
+    assert openai_prompt.startswith(SYSTEM_PROMPT)
+    assert "정형 집계와 분석 응답의 경계" in openai_prompt
+    assert "get_review_patterns_tool을 호출하지 않았다면" in local_prompt

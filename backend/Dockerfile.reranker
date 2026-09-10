@@ -1,0 +1,20 @@
+FROM vllm/vllm-openai:v0.28.0
+
+WORKDIR /app
+COPY requirements-rag-rerank.txt ./
+RUN python -m pip install \
+    --default-timeout=600 \
+    --retries=10 \
+    --prefer-binary \
+    -r requirements-rag-rerank.txt
+
+COPY src ./src
+COPY backend ./backend
+
+ENV PYTHONPATH=/app \
+    RAG_RERANKER_ENABLED=true \
+    RAG_RERANKER_DEVICE=cuda
+
+EXPOSE 8000
+ENTRYPOINT []
+CMD ["python", "-m", "uvicorn", "backend.reranker_main:app", "--host", "0.0.0.0", "--port", "8000"]

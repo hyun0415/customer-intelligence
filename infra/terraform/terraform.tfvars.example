@@ -8,13 +8,13 @@ aws_region  = "ap-northeast-2"
 
 cpu_instance_type = "t3.large"
 
-# Select an AWS Deep Learning GPU AMI that exists in aws_region.
-gpu_ami_id        = "ami-REPLACE_WITH_DLAMI_ID"
-gpu_instance_type = "p5.4xlarge"
+# Leave empty to resolve the latest AWS Deep Learning Base GPU AMI through SSM.
+gpu_ami_id        = ""
+gpu_instance_type = "g6e.2xlarge"
 gpu_use_spot      = false
 
 # Replace latest with the tested tag or digest before final benchmarking.
-vllm_image = "vllm/vllm-openai:latest"
+vllm_image = "vllm/vllm-openai:v0.28.0"
 
 tags = {
   Owner     = "customer-intelligence"

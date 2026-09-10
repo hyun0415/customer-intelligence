@@ -35,7 +35,7 @@ resource "aws_instance" "cpu" {
 resource "aws_instance" "gpu" {
   count = local.create_gpu ? 1 : 0
 
-  ami                    = var.gpu_ami_id
+  ami                    = local.gpu_ami_id
   instance_type          = var.gpu_instance_type
   subnet_id              = aws_subnet.public[0].id
   vpc_security_group_ids = [aws_security_group.gpu[0].id]

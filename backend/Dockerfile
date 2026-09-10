@@ -34,4 +34,4 @@ RUN --mount=type=cache,id=ci-pip-reranker-v2,target=/root/.cache/pip \
 ENV RAG_RERANKER_ENABLED=true
 
 EXPOSE 8000
-CMD ["uvicorn", "backend.app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "backend.reranker_main:app", "--host", "0.0.0.0", "--port", "8000"]

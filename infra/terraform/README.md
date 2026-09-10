@@ -27,7 +27,8 @@ model artifacts. The security groups expose no inbound port to the internet.
 - `enable_stack=false` creates no AWS resources.
 - CPU and GPU hosts have independent switches.
 - The GPU bootstrap installs prerequisites but does not pull a model or start
-  vLLM. Expensive model loading starts only when `ci-vllm-run` is invoked.
+  vLLM. Expensive model loading starts only when `ci-model-run` or
+  `ci-bge-m3-smoke` is invoked.
 - No API key, Google secret, Hugging Face token, or application `.env` is passed
   through Terraform or EC2 user-data.
 - The first GPU validation should use On-Demand. Spot is opt-in because it may
@@ -37,10 +38,11 @@ model artifacts. The security groups expose no inbound port to the internet.
 
 1. Confirm the selected Region has the desired GPU capacity and request the
    appropriate EC2 `P` or `G` vCPU quota before scheduling the test.
-2. In the EC2 launch wizard, locate the current AWS Deep Learning GPU AMI in
-   the same Region and copy its AMI ID.
+2. By default Terraform resolves the current x86_64 AWS Deep Learning Base GPU
+   AMI from its public SSM parameter in the selected Region. Set `gpu_ami_id`
+   only when an evaluation must pin a specific AMI release.
 3. Copy `terraform.tfvars.example` to the ignored `terraform.tfvars`, set the
-   AMI ID, profile, Region, and desired host switches.
+   profile, Region, and desired host switches.
 4. Pin `vllm_image` to the exact tag or digest used for recorded evaluation.
 
 Run only static initialization and planning until the validation window is
@@ -81,25 +83,66 @@ Use `http://localhost:8001/v1` for a host-run backend or
 ## Deliberate model start
 
 Inside the GPU Session Manager shell, export a Hugging Face token only when a
-model requires it, then start exactly one model:
+model requires it, then start a role profile. A vLLM start replaces only the
+existing vLLM container, so the BGE-M3 reranker can remain loaded separately:
 
 ```bash
 export HF_TOKEN='temporary-session-token'
-ci-vllm-run Qwen/Qwen3-8B 8192
+ci-model-run aspect
 docker logs -f customer-intelligence-vllm
 ```
 
-Stop the container before changing models:
+The fixed profiles are:
+
+| Profile | Model | Precision | Context |
+| --- | --- | --- | ---: |
+| `aspect`, `evidence` | `Qwen/Qwen3-8B` | BF16 | 8,192 |
+| `agent` | `openai/gpt-oss-20b` | MXFP4 | 16,384 |
+| `evaluator` | `pytorch/gemma-3-27b-it-FP8` | FP8 | 8,192 |
+| `ci-bge-m3-smoke` | `BAAI/bge-m3` | FP16 | 2,048 test input |
+
+Stop or change profiles with:
 
 ```bash
-ci-vllm-stop
-ci-vllm-run Qwen/Qwen3-30B-A3B-Instruct-2507 8192
+ci-model-stop
+ci-model-run agent
+ci-model-status
 ```
 
-Run the fixed project evaluation set in this order: Qwen3-8B structured roles,
-Qwen3-30B Agent, Gemma evaluator, and BGE-M3 retrieval/reranking. Record model
+The `agent` profile limits vLLM to 50% of GPU memory for the agreed single-GPU
+coexistence layout.
+Use `ci-vllm-stop` or `ci-bge-m3-stop` to stop one container, and
+`ci-model-stop` to stop both.
+
+For the full integration layout, transfer the monorepo to the GPU host and run:
+
+```bash
+cd /opt/customer-intelligence/repo
+docker compose -f compose.gpu.yaml up -d --build
+docker compose -f compose.gpu.yaml ps
+```
+
+The CPU application uses the Terraform outputs for the Agent (`:8000/v1`),
+shared Qwen structured service (`:8002/v1`), and BGE-M3 reranker (`:8003`).
+
+For the BGE-M3 smoke test, first transfer the monorepo and build the existing
+reranker target once on the GPU host:
+
+```bash
+cd /opt/customer-intelligence/repo
+docker build --target runtime-reranker \
+  -t customer-intelligence-backend:reranker \
+  -f backend/Dockerfile .
+ci-bge-m3-smoke
+```
+
+Run the fixed project evaluation set for Qwen3-8B structured roles, GPT-OSS
+20B Agent, Gemma evaluator, and BGE-M3 retrieval/reranking. GPT-OSS and BGE-M3
+may coexist for integration validation; the other large profiles remain
+sequential. Persist each stage's result before changing profiles. Record model
 revision, vLLM image, dtype or quantization, context length, cold start, p50/p95
-latency, JSON success, task accuracy, and peak GPU memory.
+latency, JSON success, task accuracy, and peak GPU memory. Use a 4-bit model
+only if an FP8 profile cannot fit after reducing concurrency or context.
 
 ## Teardown
 

@@ -19,7 +19,7 @@ from .models import (
     PolicyConflict,
 )
 from .repository import ConnectionFactory, rag_connect
-from .rerankers import BGEM3ColbertReranker, Reranker
+from .rerankers import BGEM3ColbertReranker, RemoteColbertReranker, Reranker
 
 
 class HybridRetriever:
@@ -40,7 +40,11 @@ class HybridRetriever:
         )
         self.reranker = reranker
         if self.reranker is None and self.settings.reranker_enabled:
-            self.reranker = BGEM3ColbertReranker(self.settings)
+            self.reranker = (
+                RemoteColbertReranker(self.settings)
+                if self.settings.reranker_base_url
+                else BGEM3ColbertReranker(self.settings)
+            )
         self.evidence_validator = evidence_validator
         if (
             self.evidence_validator is None
