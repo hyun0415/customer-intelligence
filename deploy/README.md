@@ -24,6 +24,18 @@ repository on EC2.
 4. Deliver the real `.env` to `/opt/customer-intelligence/.env` on the CPU host
    through an approved private secret path.
 5. Run `deploy-aws.ps1 -Target gpu`, then `-Target app`.
+
+The BGE-M3 service uses a dedicated PyTorch CUDA runtime rather than the much
+larger vLLM serving image. When only that service changed, build and publish
+only its image:
+
+```powershell
+.\deploy\scripts\publish-images.ps1 -AwsProfile terra-user -Components reranker
+```
+
+If an upload was interrupted, keep the local Docker cache and run the same
+command again. Docker/ECR reuse layers that were already completed; only the
+unfinished layer and anything after it need to be transferred again.
 6. Restore product/review data and ingest approved policies separately.
 
 The real `.env`, database contents, OAuth secrets, and API keys are never
