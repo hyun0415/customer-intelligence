@@ -3,8 +3,12 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Literal
 
-
 ModelProvider = Literal["openai", "vllm"]
+
+
+class RuntimeProfile(str, Enum):
+    OPENAI = "openai"
+    LOCAL = "local"
 
 DEFAULT_AGENT_MODEL = "gpt-5.6-terra"
 DEFAULT_ASPECT_EXTRACTOR_MODEL = "gpt-5.6-luna"
@@ -121,7 +125,16 @@ class ModelRoutingSettings:
 
     @classmethod
     def from_env(cls) -> "ModelRoutingSettings":
-        default_provider = _provider("MODEL_PROVIDER", "openai")
+        profile_name = _env("MODEL_PROFILE", RuntimeProfile.OPENAI.value).lower()
+        try:
+            profile = RuntimeProfile(profile_name)
+        except ValueError as exc:
+            raise ValueError("MODEL_PROFILE은 openai 또는 local이어야 합니다.") from exc
+        profile_provider: ModelProvider = (
+            "openai" if profile is RuntimeProfile.OPENAI else "vllm"
+        )
+        # MODEL_PROVIDER는 기존 설정과 역할별 혼합 구성을 위한 호환 override다.
+        default_provider = _provider("MODEL_PROVIDER", profile_provider)
         global_vllm_url = _env("VLLM_BASE_URL", "http://localhost:8000/v1")
         global_vllm_key = _env("VLLM_API_KEY", "local-vllm")
 

@@ -9,7 +9,7 @@ from pgvector.vector import Vector
 from src.auth.access import ALL_COLLECTIONS
 
 from .config import ALL_DEPARTMENTS, ALL_JURISDICTIONS, RagSettings
-from .embeddings import EmbeddingProvider, OpenAIEmbeddingProvider
+from .embeddings import EmbeddingProvider, build_embedding_provider
 from .evidence import EvidenceValidator, LLMEvidenceValidator
 from .models import (
     EvidenceAssessment,
@@ -35,9 +35,7 @@ class HybridRetriever:
         self.settings = settings or RagSettings()
         self.settings.validate()
         self.connection_factory = connection_factory
-        self.embedding_provider = embedding_provider or OpenAIEmbeddingProvider(
-            self.settings
-        )
+        self.embedding_provider = embedding_provider or build_embedding_provider(self.settings)
         self.reranker = reranker
         if self.reranker is None and self.settings.reranker_enabled:
             self.reranker = (
@@ -126,8 +124,13 @@ class HybridRetriever:
         return " AND ".join(conditions), params
 
     @staticmethod
-    def _base_select() -> str:
-        return """
+    def _base_select(*, embedding_join: bool = False) -> str:
+        embedding_sql = (
+            "JOIN rag_chunk_embeddings ce ON ce.chunk_id = c.chunk_id"
+            if embedding_join
+            else ""
+        )
+        return f"""
             SELECT
                 c.chunk_id, c.parent_chunk_id, c.rule_key, c.rule_effect,
                 d.document_id, d.source_id, d.title, d.source_url,
@@ -140,6 +143,7 @@ class HybridRetriever:
                     WHERE dp.document_id = d.document_id
                 ), ARRAY[]::text[]) AS parent_asins
             FROM rag_chunks c
+            {embedding_sql}
             JOIN rag_document_versions v ON v.document_version_id = c.document_version_id
             JOIN rag_documents d ON d.document_id = v.document_id
             JOIN rag_collections col ON col.collection_id = d.collection_id
@@ -174,14 +178,15 @@ class HybridRetriever:
     ) -> list[dict[str, Any]]:
         filters, params = self._filters(request, effective_at)
         query = (
-            self._base_select()
+            self._base_select(embedding_join=True)
             + f"""
             WHERE c.chunk_level = 'child'
-              AND c.embedding IS NOT NULL
-              AND c.embedding_model = %s
+              AND ce.model_key = %s
+              AND ce.model_version = %s
+              AND ce.dimensions = %s
               AND {filters}
-              AND 1 - (c.embedding <=> %s) >= %s
-            ORDER BY c.embedding <=> %s, c.chunk_id
+              AND 1 - (ce.embedding <=> %s) >= %s
+            ORDER BY ce.embedding <=> %s, c.chunk_id
             LIMIT %s
         """
         )
@@ -189,6 +194,8 @@ class HybridRetriever:
             query,
             [
                 self.settings.embedding_model,
+                self.settings.embedding_version,
+                self.settings.embedding_dimensions,
                 *params,
                 Vector(query_embedding),
                 self.settings.minimum_relevance_similarity,

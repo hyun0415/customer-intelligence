@@ -70,29 +70,32 @@ NULL이 아니라 `ALL_COLLECTIONS`, `ALL_JURISDICTIONS`, `ALL_DEPARTMENTS`로 �
 
 ## 개발 실행
 
-1. 신규 DB에는 `sql/05_create_web_schema.sql`을 적용한다. 기존 Web DB에는
-   `sql/06_add_conversation_product_context.sql`과
-   `sql/07_create_security_audit_log.sql`,
-   `sql/08_add_conversation_archiving.sql`도 적용한다.
+1. 신규 DB에는 `db/migrations`의 SQL을 번호순으로 적용한다. 기존 DB에도 아직
+   적용하지 않은 migration만 순서대로 적용한다.
 2. `.env.example`을 참고해 `SESSION_SECRET`을 설정한다.
 3. Google Cloud OAuth Client에 `http://localhost:3000/api/auth/callback`을 등록하고
    `GOOGLE_OIDC_CLIENT_ID`, `GOOGLE_OIDC_CLIENT_SECRET`,
    `GOOGLE_OIDC_REDIRECT_URI`를 설정한다. OIDC 없이 개발할 때만
    `DEV_LOGIN_ENABLED=true`를 사용한다.
-4. `docker compose -f compose.yaml -f compose.web.yaml up --build`를 실행한다.
+4. 아래 명령으로 로컬 인프라와 Web 애플리케이션을 실행한다.
+
+   ```powershell
+   docker compose --env-file .env -f deploy/compose/local-infra.yaml -f deploy/compose/local-app.yaml up --build
+   ```
 5. `http://localhost:3000`을 연다.
 
 Backend 이미지의 ML 의존성은 크므로 최초 다운로드가 오래 걸릴 수 있다. BuildKit
 pip cache와 600초 timeout을 사용하므로 네트워크 timeout 뒤 같은 build 명령을
 재실행하면 완료된 다운로드를 최대한 재사용한다.
 
-ColBERT 재정렬까지 포함한 전체 Backend는 다음 override를 추가한다.
+로컬 GPU endpoint를 연결할 때는 `.env`에서 `MODEL_PROFILE=local`과 역할별 URL,
+`RAG_EMBEDDING_BASE_URL`, `RAG_RERANKER_BASE_URL`을 지정한다.
 
 ```powershell
-docker compose -f compose.yaml -f compose.web.yaml -f compose.reranker.yaml up --build
+docker compose --env-file .env -f deploy/compose/local-infra.yaml -f deploy/compose/local-app.yaml up --build
 ```
 
-두 이미지는 같은 API와 코드를 사용하며 `RAG_RERANKER_ENABLED`만 다르다.
+OpenAI 기본 경로는 `MODEL_PROFILE=openai` 한 줄로 유지한다.
 
 운영 환경은 `APP_ENV=production`, `SESSION_COOKIE_SECURE=true`를 사용한다.
 운영에서 개발 로그인은 설정 검증 단계에서 거부된다.

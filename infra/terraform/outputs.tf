@@ -37,3 +37,7 @@ output "cpu_to_gpu_reranker_base_url" {
 output "access_note" {
   value = "No inbound ports are public. Use AWS Systems Manager Session Manager or port forwarding."
 }
+
+output "ecr_repository_urls" {
+  value = { for name, repository in aws_ecr_repository.images : name => repository.repository_url }
+}

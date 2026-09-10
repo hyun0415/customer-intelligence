@@ -16,7 +16,7 @@ load_dotenv(PROJECT_ROOT / ".env")
 from langchain_core.messages import AIMessage, ToolMessage  # noqa: E402
 
 from src.agent import extract_text, run_agent  # noqa: E402
-from src.model_config import ModelRoutingSettings  # noqa: E402
+from src.llm.config import ModelRoutingSettings  # noqa: E402
 
 
 CASES = [

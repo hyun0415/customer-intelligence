@@ -6,8 +6,8 @@ from dotenv import load_dotenv
 from langchain.agents import create_agent
 from langchain_core.messages import AIMessage, ToolMessage
 
-from src.model_clients import build_chat_model
-from src.model_config import ModelRole, ModelRoutingSettings
+from src.llm.clients import build_chat_model
+from src.llm.config import ModelRole, ModelRoutingSettings
 from src.prompts import build_agent_system_prompt
 from src.response_contract import apply_response_contract
 from src.tools import AGENT_TOOLS

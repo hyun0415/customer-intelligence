@@ -11,9 +11,9 @@ SSM port forwarding
         |
 public subnet, no public inbound rules
         |
-        +-- CPU EC2: Next.js + FastAPI + PostgreSQL + Redis
+        +-- CPU EC2: ECR images for Next.js + FastAPI, PostgreSQL + Redis
         |      |
-        |      +-- TCP 8000 through security-group reference only
+        |      +-- TCP 8000-8003 through security-group reference only
         |             |
         +-- GPU EC2: vLLM, one validation model at a time
 ```
@@ -26,9 +26,9 @@ model artifacts. The security groups expose no inbound port to the internet.
 
 - `enable_stack=false` creates no AWS resources.
 - CPU and GPU hosts have independent switches.
-- The GPU bootstrap installs prerequisites but does not pull a model or start
-  vLLM. Expensive model loading starts only when `ci-model-run` or
-  `ci-bge-m3-smoke` is invoked.
+- Application images are built once on the development machine, stored in
+  private ECR repositories, and pulled by EC2. EC2 does not clone the source
+  repository or rebuild images.
 - No API key, Google secret, Hugging Face token, or application `.env` is passed
   through Terraform or EC2 user-data.
 - The first GPU validation should use On-Demand. Spot is opt-in because it may
@@ -80,7 +80,30 @@ aws ssm start-session --target $gpuId --document-name AWS-StartPortForwardingSes
 Use `http://localhost:8001/v1` for a host-run backend or
 `http://host.docker.internal:8001/v1` for the existing Docker backend.
 
-## Deliberate model start
+## Publish and deploy immutable images
+
+Terraform creates private ECR repositories for `backend`, `frontend`, and
+`reranker`. Commit the tested source first, then publish images tagged with the
+commit SHA:
+
+```powershell
+.\deploy\scripts\publish-images.ps1 -AwsProfile terra-user
+```
+
+The real `.env` is never built into an image, committed, or passed through
+Terraform. Create `/opt/customer-intelligence/.env` on the CPU host through an
+approved secret-delivery path. Then deploy the GPU and application hosts:
+
+```powershell
+.\deploy\scripts\deploy-aws.ps1 -Target gpu -AwsProfile terra-user
+.\deploy\scripts\deploy-aws.ps1 -Target app -AwsProfile terra-user
+```
+
+The backend image applies ordered files from `db/migrations` before the API
+starts. Product/review rows and approved policy content are data, not schema;
+restore them separately from an encrypted, access-controlled database backup.
+
+## Deliberate model start (diagnostic fallback)
 
 Inside the GPU Session Manager shell, export a Hugging Face token only when a
 model requires it, then start a role profile. A vLLM start replaces only the
@@ -114,27 +137,10 @@ coexistence layout.
 Use `ci-vllm-stop` or `ci-bge-m3-stop` to stop one container, and
 `ci-model-stop` to stop both.
 
-For the full integration layout, transfer the monorepo to the GPU host and run:
-
-```bash
-cd /opt/customer-intelligence/repo
-docker compose -f compose.gpu.yaml up -d --build
-docker compose -f compose.gpu.yaml ps
-```
-
-The CPU application uses the Terraform outputs for the Agent (`:8000/v1`),
+The normal integration path uses `deploy/scripts/deploy-aws.ps1`; no GitHub
+credentials or source checkout is required on EC2. The CPU application uses
+the Terraform outputs for the Agent (`:8000/v1`),
 shared Qwen structured service (`:8002/v1`), and BGE-M3 reranker (`:8003`).
-
-For the BGE-M3 smoke test, first transfer the monorepo and build the existing
-reranker target once on the GPU host:
-
-```bash
-cd /opt/customer-intelligence/repo
-docker build --target runtime-reranker \
-  -t customer-intelligence-backend:reranker \
-  -f backend/Dockerfile .
-ci-bge-m3-smoke
-```
 
 Run the fixed project evaluation set for Qwen3-8B structured roles, GPT-OSS
 20B Agent, Gemma evaluator, and BGE-M3 retrieval/reranking. GPT-OSS and BGE-M3

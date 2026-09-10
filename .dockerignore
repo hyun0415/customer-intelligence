@@ -8,6 +8,6 @@ __pycache__
 .env
 data
 eval/results
-notebook
+notebooks
 frontend/node_modules
 frontend/.next

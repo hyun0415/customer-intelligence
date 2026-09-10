@@ -1,3 +1,5 @@
+name: customer-intelligence
+
 services:
   postgres:
     image: pgvector/pgvector:0.8.5-pg17-bookworm
@@ -9,7 +11,7 @@ services:
       - "${POSTGRES_PORT}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ../../db/migrations:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test:
         [

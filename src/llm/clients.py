@@ -3,8 +3,7 @@ from typing import TypeVar
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel
 
-from src.model_config import ModelRole, ModelRoutingSettings, RoleModelSettings
-
+from .config import ModelRole, ModelRoutingSettings, RoleModelSettings
 
 SchemaT = TypeVar("SchemaT", bound=BaseModel)
 

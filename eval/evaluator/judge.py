@@ -3,8 +3,8 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from eval.prompts.judge_prompt import build_judge_prompt
 from eval.prompts.evaluator_prompt import EVALUATOR_SYSTEM_PROMPT
-from src.model_clients import build_chat_model
-from src.model_config import DEFAULT_EVALUATOR_MODEL, ModelRole, ModelRoutingSettings
+from src.llm.clients import build_chat_model
+from src.llm.config import DEFAULT_EVALUATOR_MODEL, ModelRole, ModelRoutingSettings
 
 from .schemas import JudgeResult, RuleCheckResult
 

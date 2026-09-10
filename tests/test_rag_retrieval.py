@@ -172,7 +172,9 @@ def test_vector_candidates_apply_minimum_relevance_similarity():
     rows = instance._vector_candidates(conn, request, NOW, [0.0] * 1536)
 
     assert rows == []
-    assert "1 - (c.embedding <=> %s) >= %s" in conn.query
+    assert "JOIN rag_chunk_embeddings ce" in conn.query
+    assert "1 - (ce.embedding <=> %s) >= %s" in conn.query
+    assert conn.params[0:3] == ["text-embedding-3-small", "1", 1536]
     assert conn.params[-3] == instance.settings.minimum_relevance_similarity
 
 

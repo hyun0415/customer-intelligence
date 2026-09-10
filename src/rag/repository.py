@@ -98,7 +98,9 @@ class RagRepository:
                     (document_id, digest),
                 ).fetchone()
                 if existing:
-                    return existing["document_version_id"]
+                    version_id = existing["document_version_id"]
+                    self._upsert_existing_embeddings(conn, version_id, chunks)
+                    return version_id
 
                 if metadata.supersedes_version is not None:
                     superseded = conn.execute(
@@ -219,9 +221,67 @@ class RagRepository:
 
                 return version_id
 
+    def _upsert_existing_embeddings(
+        self,
+        conn,
+        version_id: int,
+        chunks: Sequence[ChunkDraft],
+    ) -> None:
+        """Attach another model's vectors without duplicating a document version."""
+        stored_children = {
+            (row["chunk_index"], row["embedding_text"]): row["chunk_id"]
+            for row in conn.execute(
+                """
+                SELECT chunk_id, chunk_index, embedding_text
+                FROM rag_chunks
+                WHERE document_version_id = %s AND chunk_level = 'child'
+                """,
+                (version_id,),
+            ).fetchall()
+        }
+        incoming_children = [
+            chunk
+            for chunk in chunks
+            if chunk.chunk_level == "child" and chunk.embedding is not None
+        ]
+        if len(stored_children) != len(incoming_children):
+            raise ValueError(
+                "기존 버전의 child chunk 구조가 현재 ingestion 설정과 다릅니다."
+            )
+
+        for chunk in incoming_children:
+            chunk_id = stored_children.get((chunk.chunk_index, chunk.embedding_text))
+            if chunk_id is None:
+                raise ValueError(
+                    "기존 버전의 child chunk 내용이 현재 ingestion 결과와 다릅니다."
+                )
+            conn.execute(
+                """
+                INSERT INTO rag_chunk_embeddings (
+                    chunk_id, model_key, model_version, dimensions, embedding
+                ) VALUES (%s, %s, %s, %s, %s)
+                ON CONFLICT (chunk_id, model_key, model_version)
+                DO UPDATE SET dimensions = EXCLUDED.dimensions,
+                              embedding = EXCLUDED.embedding
+                """,
+                (
+                    chunk_id,
+                    self.settings.embedding_model,
+                    self.settings.embedding_version,
+                    self.settings.embedding_dimensions,
+                    Vector(chunk.embedding),
+                ),
+            )
+
     def _insert_chunk(
         self, conn, version_id: int, chunk: ChunkDraft, parent_id: int | None
     ) -> int:
+        legacy_embedding = (
+            chunk.embedding
+            if chunk.embedding is not None
+            and self.settings.embedding_dimensions == 1536
+            else None
+        )
         row = conn.execute(
             """
             INSERT INTO rag_chunks (
@@ -242,14 +302,33 @@ class RagRepository:
                 chunk.chunk_text,
                 chunk.embedding_text,
                 chunk.token_count,
-                self.settings.embedding_model if chunk.embedding is not None else None,
+                self.settings.embedding_model if legacy_embedding is not None else None,
                 self.settings.embedding_version
-                if chunk.embedding is not None
+                if legacy_embedding is not None
                 else None,
-                Vector(chunk.embedding) if chunk.embedding is not None else None,
+                Vector(legacy_embedding) if legacy_embedding is not None else None,
                 chunk.rule_key,
                 chunk.rule_effect,
                 Jsonb(chunk.metadata),
             ),
         ).fetchone()
-        return row["chunk_id"]
+        chunk_id = row["chunk_id"]
+        if chunk.embedding is not None:
+            conn.execute(
+                """
+                INSERT INTO rag_chunk_embeddings (
+                    chunk_id, model_key, model_version, dimensions, embedding
+                ) VALUES (%s, %s, %s, %s, %s)
+                ON CONFLICT (chunk_id, model_key, model_version)
+                DO UPDATE SET dimensions = EXCLUDED.dimensions,
+                              embedding = EXCLUDED.embedding
+                """,
+                (
+                    chunk_id,
+                    self.settings.embedding_model,
+                    self.settings.embedding_version,
+                    self.settings.embedding_dimensions,
+                    Vector(chunk.embedding),
+                ),
+            )
+        return chunk_id

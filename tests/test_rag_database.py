@@ -6,7 +6,7 @@ from pgvector.psycopg import register_vector
 
 from src.database import connect
 from src.rag.chunker import ParentChildChunker
-from src.rag.config import ALL_DEPARTMENTS, ALL_JURISDICTIONS
+from src.rag.config import ALL_DEPARTMENTS, ALL_JURISDICTIONS, RagSettings
 from src.rag.ingestion import RagIngestionService
 from src.rag.models import EvidenceAssessment, KnowledgeSearchRequest, PolicyMetadata
 from src.rag.repository import RagRepository
@@ -29,6 +29,14 @@ class FakeEmbeddings:
 
     def embed_query(self, text):
         return [1.0] + [0.0] * 1535
+
+
+class FakeBGEEmbeddings:
+    def embed_documents(self, texts):
+        return [[1.0] + [0.0] * 1023 for _ in texts]
+
+    def embed_query(self, text):
+        return [1.0] + [0.0] * 1023
 
 
 class FakeReranker:
@@ -61,8 +69,12 @@ def test_schema_ingestion_and_hybrid_retrieval_round_trip(tmp_path):
     conn = connect()
     register_vector(conn)
     try:
-        schema = Path(__file__).parents[1] / "sql" / "04_create_rag_schema.sql"
-        conn.execute(schema.read_text(encoding="utf-8"), prepare=False)
+        migrations = Path(__file__).parents[1] / "db" / "migrations"
+        for filename in ("004_policy_rag.sql", "010_multi_model_embeddings.sql"):
+            conn.execute(
+                (migrations / filename).read_text(encoding="utf-8"),
+                prepare=False,
+            )
 
         path = tmp_path / "policy.md"
         path.write_text(
@@ -117,6 +129,42 @@ def test_schema_ingestion_and_hybrid_retrieval_round_trip(tmp_path):
                 }
             ),
         )
+
+        bge_settings = RagSettings(
+            embedding_provider="remote_bge_m3",
+            embedding_model="BAAI/bge-m3",
+            embedding_dimensions=1024,
+            embedding_base_url="http://bge.test",
+        )
+        bge_service = RagIngestionService(
+            repository=RagRepository(
+                connection_factory=factory,
+                settings=bge_settings,
+            ),
+            embedding_provider=FakeBGEEmbeddings(),
+            chunker=ParentChildChunker(bge_settings, encoding=FakeEncoding()),
+            settings=bge_settings,
+        )
+        version_id = bge_service.ingest(
+            path,
+            metadata.model_copy(
+                update={
+                    "version_number": 2,
+                    "valid_from": datetime(2026, 6, 1, tzinfo=timezone.utc),
+                    "supersedes_version": 1,
+                }
+            ),
+        )
+        bge_count = conn.execute(
+            """
+            SELECT COUNT(*) AS count
+            FROM rag_chunk_embeddings e
+            JOIN rag_chunks c ON c.chunk_id = e.chunk_id
+            WHERE c.document_version_id = %s AND e.model_key = 'BAAI/bge-m3'
+            """,
+            (version_id,),
+        ).fetchone()["count"]
+        assert bge_count > 0
 
         response = HybridRetriever(
             connection_factory=factory,

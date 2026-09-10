@@ -6,7 +6,7 @@ from typing import Any
 
 from .chunker import ParentChildChunker
 from .config import RagSettings
-from .embeddings import EmbeddingProvider, OpenAIEmbeddingProvider, attach_embeddings
+from .embeddings import EmbeddingProvider, attach_embeddings, build_embedding_provider
 from .loaders import load_policy_document
 from .models import PolicyMetadata
 from .repository import RagRepository
@@ -87,9 +87,7 @@ class RagIngestionService:
     ) -> None:
         self.settings = settings or RagSettings()
         self.repository = repository or RagRepository(settings=self.settings)
-        self.embedding_provider = embedding_provider or OpenAIEmbeddingProvider(
-            self.settings
-        )
+        self.embedding_provider = embedding_provider or build_embedding_provider(self.settings)
         self.chunker = chunker or ParentChildChunker(self.settings)
 
     def ingest(self, path: str | Path, metadata: PolicyMetadata) -> int:

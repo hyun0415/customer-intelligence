@@ -22,15 +22,15 @@ Tool Calling과 reasoning parser를 사용한다. Evaluator는 Agent와 다른 G
 
 ## Provider 전환
 
-기본 provider는 `openai`다. `MODEL_PROVIDER=vllm`을 설정하면 모든 역할이
+기본 프로필은 `MODEL_PROFILE=openai`다. `MODEL_PROFILE=local`을 설정하면 모든 역할이
 OpenAI-compatible vLLM Chat Completions endpoint를 사용한다. 역할별
 `*_MODEL_PROVIDER`와 `*_MODEL_BASE_URL`을 설정하면 OpenAI와 로컬 모델을
 혼합하거나 모델별 inference service를 분리할 수 있다.
 
 구체적인 환경변수 예시는 프로젝트의 `.env.example`을 참고한다. 모델 호출부는
-`src/model_clients.py`, 역할별 설정은 `src/model_config.py`에서 관리한다.
+`src/llm/clients.py`, 역할별 설정은 `src/llm/config.py`에서 관리한다.
 
-L40S 48GB 단일 GPU 검증에서는 `compose.gpu.yaml`로 세 서비스를 동시에 둔다.
+L40S 48GB 단일 GPU 검증에서는 `deploy/compose/aws-gpu.yaml`로 세 서비스를 동시에 둔다.
 
 - `:8000`: GPT-OSS 20B 최종 Agent, GPU 예약 48%
 - `:8002`: Qwen3-8B Aspect 추출·근거 판정 공용, GPU 예약 40%, 동시 요청 1개

@@ -181,7 +181,7 @@ RRF로 결합합니다. 검색 전에 상품 범위, 유효기간, Collection, �
 조건을 적용합니다. 후보 Parent 섹션은 BGE-M3 multi-vector(ColBERT)로 재정렬한
 뒤 LLM 구조화 판정에서 직접 근거로 확인된 경우에만 Agent 문맥으로 제공합니다.
 
-스키마는 `sql/04_create_rag_schema.sql`, 정책 metadata 규칙은
+스키마는 `db/migrations/004_policy_rag.sql`, 정책 metadata 규칙은
 `docs/rag/policy_metadata_schema.md`에서 확인할 수 있습니다. 실제 승인된 사내
 정책 내용은 별도 입력 데이터이며 이 저장소에서 임의로 생성하지 않습니다.
 PDF ingestion을 사용할 경우 선택 의존성인 `pypdf`를 설치해야 합니다.
@@ -189,7 +189,8 @@ PDF ingestion을 사용할 경우 선택 의존성인 `pypdf`를 설치해야 �
 RAG 스키마와 승인된 내부 정책 manifest는 다음 순서로 적용합니다.
 
 ```powershell
-psql -f sql/04_create_rag_schema.sql
+psql -f db/migrations/004_policy_rag.sql
+psql -f db/migrations/010_multi_model_embeddings.sql
 python -m src.rag.ingestion <internal-policy-manifest.csv>
 ```
 
@@ -260,11 +261,11 @@ python -m eval.rag_reranker_benchmark --candidate-limits 10,20,30,50
 재정렬만 실행할 수 있습니다.
 
 ```powershell
-python -m eval.export_colab_rerank_input
+python -m eval.experiments.export_colab_rerank_input
 ```
 
 생성된 `eval/results/colab_rerank_input.json`을
-`notebook/colab_bge_m3_rerank_eval.ipynb` 실행 중 업로드합니다. Colab 결과 JSON은
+`notebooks/colab_bge_m3_rerank_eval.ipynb` 실행 중 업로드합니다. Colab 결과 JSON은
 로컬의 full 단계 결과와 결합해 근거 판정 전후를 비교할 수 있습니다.
 
 자세한 설계 근거는 [ADR-001](docs/adr/001-hybrid-sql-rag-architecture.md)을 참고하세요.
@@ -275,3 +276,32 @@ python -m eval.export_colab_rerank_input
 Web·API·PostgreSQL·Redis를, GPU EC2에는 vLLM을 분리하며 기본값에서는 어떤 AWS
 리소스도 생성하지 않습니다. 준비 절차와 비용 안전장치는
 [Terraform 안내](infra/terraform/README.md)를 참고하세요.
+
+검증된 이미지는 개발 PC에서 한 번만 빌드해 private ECR에 올리고, EC2는 같은
+commit SHA tag의 이미지를 pull합니다. 따라서 GPU 호스트에서 저장소를 clone하거나
+무거운 Python 의존성을 다시 build하지 않습니다.
+
+```powershell
+.\deploy\scripts\publish-images.ps1 -AwsProfile terra-user
+.\deploy\scripts\deploy-aws.ps1 -Target gpu -AwsProfile terra-user
+.\deploy\scripts\deploy-aws.ps1 -Target app -AwsProfile terra-user
+```
+
+실제 `.env`는 이미지·Terraform state·Git에 포함하지 않습니다. 새 DB의 스키마는
+Backend 이미지의 `db/migrations`로 적용하고, 리뷰 데이터와 승인 정책은 암호화된
+DB 백업 또는 별도 ingestion 경로로 복원합니다.
+
+주요 디렉터리는 역할별로 구분했습니다.
+
+- `src/llm`: OpenAI/local 모델 프로필과 공통 호출 인터페이스
+- `src/rag`: 정책 ingestion, Hybrid Retrieval, 근거 판정
+- `db/migrations`: 번호순 DB 스키마 변경
+- `deploy`: ECR 이미지 게시와 EC2 배포 파일
+- `eval/experiments`: 일회성 Colab·모델 비교 실험
+- `notebooks`: 재현 가능한 실험 노트북
+
+로컬 Web 실행도 `deploy/compose` 아래의 파일을 사용합니다.
+
+```powershell
+docker compose --env-file .env -f deploy/compose/local-infra.yaml -f deploy/compose/local-app.yaml up --build
+```

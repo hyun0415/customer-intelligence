@@ -1,15 +1,15 @@
 import pytest
 
-import src.model_clients as model_clients
+import src.llm.clients as model_clients
 from eval.evaluator.judge import LLMJudge
 from eval.evaluator.schemas import RuleCheckResult
 from src.analysis.schemas import ClassifiedReview
-from src.model_clients import build_chat_model, build_structured_model
-from src.model_config import ModelRole, ModelRoutingSettings
+from src.llm.clients import build_chat_model, build_structured_model
+from src.llm.config import ModelRole, ModelRoutingSettings
 from src.rag.config import RagSettings
 
-
 MODEL_ENV_NAMES = (
+    "MODEL_PROFILE",
     "MODEL_PROVIDER",
     "OPENAI_MODEL",
     "REVIEW_EXTRACTOR_MODEL",
@@ -28,6 +28,10 @@ MODEL_ENV_NAMES = (
     "VLLM_REVIEW_EXTRACTOR_MODEL",
     "VLLM_RAG_EVIDENCE_MODEL",
     "VLLM_EVALUATOR_MODEL",
+    "AGENT_MODEL_BASE_URL",
+    "REVIEW_EXTRACTOR_MODEL_BASE_URL",
+    "RAG_EVIDENCE_MODEL_BASE_URL",
+    "EVALUATOR_MODEL_BASE_URL",
 )
 
 
@@ -75,6 +79,19 @@ def test_vllm_defaults_select_gpt_oss_qwen_and_gemma(monkeypatch):
     assert settings.evaluator.model == "pytorch/gemma-3-27b-it-FP8"
     assert settings.aspect_extractor.disable_thinking is True
     assert settings.evaluator.base_url == "http://inference.test/v1"
+
+
+def test_local_profile_selects_vllm_without_legacy_provider_flag(monkeypatch):
+    for name in MODEL_ENV_NAMES:
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("MODEL_PROFILE", "local")
+    monkeypatch.setenv("VLLM_BASE_URL", "http://inference.test/v1")
+
+    settings = ModelRoutingSettings.from_env()
+
+    assert settings.agent.provider == "vllm"
+    assert settings.agent.model == "openai/gpt-oss-20b"
+    assert settings.aspect_extractor.model == "Qwen/Qwen3-8B"
 
 
 def test_role_provider_override_supports_mixed_operation(monkeypatch):

@@ -16,6 +16,14 @@ class RerankResponse(BaseModel):
     scores: list[float]
 
 
+class EmbedRequest(BaseModel):
+    texts: list[str] = Field(min_length=1, max_length=50)
+
+
+class EmbedResponse(BaseModel):
+    vectors: list[list[float]]
+
+
 @lru_cache(maxsize=1)
 def get_reranker() -> BGEM3ColbertReranker:
     return BGEM3ColbertReranker(
@@ -34,3 +42,8 @@ def health() -> dict[str, str]:
 @app.post("/rerank", response_model=RerankResponse)
 def rerank(request: RerankRequest) -> RerankResponse:
     return RerankResponse(scores=get_reranker().score(request.query, request.passages))
+
+
+@app.post("/embed", response_model=EmbedResponse)
+def embed(request: EmbedRequest) -> EmbedResponse:
+    return EmbedResponse(vectors=get_reranker().embed(request.texts))

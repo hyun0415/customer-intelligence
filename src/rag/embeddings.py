@@ -1,5 +1,8 @@
-from collections.abc import Sequence
-from typing import Protocol
+import json
+from collections.abc import Callable, Sequence
+from typing import Any, Protocol
+from urllib.parse import urljoin
+from urllib.request import Request, urlopen
 
 from langchain_openai import OpenAIEmbeddings
 
@@ -20,6 +23,9 @@ class OpenAIEmbeddingProvider:
         self.client = OpenAIEmbeddings(
             model=self.settings.embedding_model,
             dimensions=self.settings.embedding_dimensions,
+            # Child chunk 길이는 ingestion 단계에서 이미 제한한다. LangChain의
+            # 추가 길이 검사를 끄면 런타임에 tiktoken 파일을 내려받지 않는다.
+            check_embedding_ctx_length=False,
         )
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
@@ -27,6 +33,49 @@ class OpenAIEmbeddingProvider:
 
     def embed_query(self, text: str) -> list[float]:
         return self.client.embed_query(text)
+
+
+class RemoteBGEEmbeddingProvider:
+    def __init__(
+        self,
+        settings: RagSettings | None = None,
+        opener: Callable[..., Any] = urlopen,
+    ) -> None:
+        self.settings = settings or RagSettings()
+        self.settings.validate()
+        if not self.settings.embedding_base_url:
+            raise ValueError("원격 embedding에는 RAG_EMBEDDING_BASE_URL이 필요합니다.")
+        self._opener = opener
+
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        if not texts:
+            return []
+        request = Request(
+            urljoin(self.settings.embedding_base_url.rstrip("/") + "/", "embed"),
+            data=json.dumps({"texts": texts}, ensure_ascii=False).encode("utf-8"),
+            headers={"Content-Type": "application/json; charset=utf-8"},
+            method="POST",
+        )
+        with self._opener(
+            request,
+            timeout=self.settings.embedding_timeout_seconds,
+        ) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+        vectors = [[float(value) for value in vector] for vector in payload["vectors"]]
+        if len(vectors) != len(texts):
+            raise ValueError("원격 embedding 수와 입력 문서 수가 다릅니다.")
+        if any(len(vector) != self.settings.embedding_dimensions for vector in vectors):
+            raise ValueError("원격 embedding 차원이 설정과 다릅니다.")
+        return vectors
+
+    def embed_query(self, text: str) -> list[float]:
+        return self.embed_documents([text])[0]
+
+
+def build_embedding_provider(settings: RagSettings) -> EmbeddingProvider:
+    if settings.embedding_provider == "remote_bge_m3":
+        return RemoteBGEEmbeddingProvider(settings)
+    return OpenAIEmbeddingProvider(settings)
 
 
 def attach_embeddings(

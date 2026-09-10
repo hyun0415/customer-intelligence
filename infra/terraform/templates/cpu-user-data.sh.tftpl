@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-dnf install -y docker git jq
+dnf install -y awscli docker git jq
 systemctl enable --now docker
 systemctl enable --now amazon-ssm-agent
 usermod -aG docker ec2-user
@@ -16,6 +16,7 @@ chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
 
 cat >/opt/customer-intelligence/READY.txt <<'EOF'
 CPU host bootstrap completed.
-Transfer the repository and a production .env through an approved private path.
+Deploy immutable ECR images with deploy/scripts/deploy-aws.ps1.
+Deliver the production .env through an approved private secret path.
 Do not store secrets in Terraform state or user-data.
 EOF

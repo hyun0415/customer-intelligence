@@ -16,6 +16,7 @@ RUN --mount=type=cache,id=ci-pip-core-v2,target=/root/.cache/pip \
 
 COPY src ./src
 COPY backend ./backend
+COPY db/migrations ./db/migrations
 
 FROM base AS runtime
 ENV RAG_RERANKER_ENABLED=false

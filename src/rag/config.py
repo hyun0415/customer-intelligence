@@ -1,7 +1,7 @@
 import os
 from dataclasses import dataclass, field
 
-from src.model_config import ModelRoutingSettings
+from src.llm.config import ModelRoutingSettings
 
 ALL_JURISDICTIONS = "ALL_JURISDICTIONS"
 ALL_DEPARTMENTS = "ALL_DEPARTMENTS"
@@ -21,15 +21,40 @@ def _env_bool(name: str, default: bool) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _embedding_provider() -> str:
+    configured = os.getenv("RAG_EMBEDDING_PROVIDER")
+    if configured and configured.strip():
+        return configured.strip().lower()
+    is_local = os.getenv("MODEL_PROFILE", "openai").strip().lower() == "local"
+    return "remote_bge_m3" if is_local else "openai"
+
+
+def _embedding_model() -> str:
+    configured = os.getenv("RAG_EMBEDDING_MODEL")
+    if configured and configured.strip():
+        return configured.strip()
+    return "BAAI/bge-m3" if _embedding_provider() == "remote_bge_m3" else "text-embedding-3-small"
+
+
+def _embedding_dimensions() -> int:
+    configured = os.getenv("RAG_EMBEDDING_DIMENSIONS")
+    if configured:
+        return int(configured)
+    return 1024 if _embedding_provider() == "remote_bge_m3" else 1536
+
+
 @dataclass(frozen=True)
 class RagSettings:
-    embedding_model: str = field(
-        default_factory=lambda: os.getenv(
-            "RAG_EMBEDDING_MODEL", "text-embedding-3-small"
-        )
+    embedding_provider: str = field(default_factory=_embedding_provider)
+    embedding_model: str = field(default_factory=_embedding_model)
+    embedding_dimensions: int = field(default_factory=_embedding_dimensions)
+    embedding_base_url: str | None = field(
+        default_factory=lambda: os.getenv("RAG_EMBEDDING_BASE_URL")
+        or os.getenv("RAG_RERANKER_BASE_URL")
+        or None
     )
-    embedding_dimensions: int = field(
-        default_factory=lambda: int(os.getenv("RAG_EMBEDDING_DIMENSIONS", "1536"))
+    embedding_timeout_seconds: float = field(
+        default_factory=lambda: float(os.getenv("RAG_EMBEDDING_TIMEOUT_SECONDS", "60"))
     )
     embedding_version: str = field(
         default_factory=lambda: os.getenv("RAG_EMBEDDING_VERSION", "1")
@@ -113,8 +138,20 @@ class RagSettings:
             raise ValueError("child token 범위가 올바르지 않습니다.")
         if not self.parent_min_tokens <= self.parent_max_tokens:
             raise ValueError("parent token 범위가 올바르지 않습니다.")
-        if self.embedding_dimensions != 1536:
-            raise ValueError("현재 DB vector column은 1536차원으로 고정되어 있습니다.")
+        if self.embedding_provider not in {"openai", "remote_bge_m3"}:
+            raise ValueError("embedding provider는 openai 또는 remote_bge_m3여야 합니다.")
+        if self.embedding_dimensions <= 0 or self.embedding_timeout_seconds <= 0:
+            raise ValueError("embedding 차원과 timeout은 양수여야 합니다.")
+        if (
+            self.embedding_provider == "openai"
+            and self.embedding_dimensions != 1536
+        ):
+            raise ValueError("OpenAI embedding은 현재 1536차원 구성을 사용합니다.")
+        if self.embedding_provider == "remote_bge_m3":
+            if self.embedding_dimensions != 1024:
+                raise ValueError("BGE-M3 dense embedding은 1024차원이어야 합니다.")
+            if not self.embedding_base_url:
+                raise ValueError("원격 BGE-M3 embedding에는 base URL이 필요합니다.")
         if self.rrf_k <= 0 or self.candidate_limit <= 0:
             raise ValueError("RRF와 candidate 설정은 양수여야 합니다.")
         if not 0.0 <= self.minimum_relevance_similarity <= 1.0:

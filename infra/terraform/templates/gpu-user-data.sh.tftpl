@@ -4,12 +4,12 @@ set -euo pipefail
 if command -v apt-get >/dev/null 2>&1; then
   export DEBIAN_FRONTEND=noninteractive
   apt-get update
-  apt-get install -y git jq
+  apt-get install -y awscli git jq
   if ! command -v docker >/dev/null 2>&1; then
     apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
   fi
 elif command -v dnf >/dev/null 2>&1; then
-  dnf install -y git jq
+  dnf install -y awscli git jq
   if ! command -v docker >/dev/null 2>&1; then
     dnf install -y docker
   fi

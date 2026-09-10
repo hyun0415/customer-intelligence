@@ -3,8 +3,8 @@ from typing import Protocol
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from src.model_clients import build_structured_model
-from src.model_config import ModelRole, ModelRoutingSettings
+from src.llm.clients import build_structured_model
+from src.llm.config import ModelRole, ModelRoutingSettings
 
 from .config import RagSettings
 from .models import EvidenceAssessment, KnowledgeSource

@@ -1,10 +1,10 @@
 services:
   backend:
     build:
-      context: .
+      context: ../..
       dockerfile: backend/Dockerfile
       target: runtime
-    env_file: .env
+    env_file: ../../.env
     environment:
       DB_HOST: postgres
       DB_PORT: 5432
@@ -37,7 +37,7 @@ services:
 
   frontend:
     build:
-      context: .
+      context: ../..
       dockerfile: frontend/Dockerfile
       args:
         BACKEND_URL: http://backend:8000
@@ -49,8 +49,7 @@ services:
       backend:
         condition: service_healthy
 
-  # 실제 GPU 환경에서는 이 서비스를 NVIDIA runtime이 설정된 별도 Host/EKS
-  # GPU Node에 배치하고 VLLM_BASE_URL을 backend에 전달한다.
+  # 단일 vLLM 확인용 profile. 전체 로컬 GPU 구성은 local-gpu.yaml을 사용한다.
   vllm:
     image: vllm/vllm-openai:v0.28.0
     profiles: ["gpu"]

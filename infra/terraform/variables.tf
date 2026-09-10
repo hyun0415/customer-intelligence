@@ -121,6 +121,12 @@ variable "docker_compose_version" {
   default     = "v2.40.3"
 }
 
+variable "ecr_force_delete" {
+  description = "Allow Terraform destroy to remove validation repositories that still contain images."
+  type        = bool
+  default     = true
+}
+
 variable "tags" {
   type    = map(string)
   default = {}

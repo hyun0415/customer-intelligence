@@ -1,0 +1,82 @@
+services:
+  postgres:
+    image: pgvector/pgvector:0.8.5-pg17-bookworm
+    env_file: ${APP_ENV_FILE:-/opt/customer-intelligence/.env}
+    restart: unless-stopped
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:8.8.1-alpine
+    env_file: ${APP_ENV_FILE:-/opt/customer-intelligence/.env}
+    restart: unless-stopped
+    command: ["sh", "-c", "redis-server --appendonly yes --appendfsync everysec --requirepass '$$REDIS_PASSWORD'"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$${REDIS_PASSWORD}\" ping | grep PONG"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  migrate:
+    image: ${BACKEND_IMAGE:?BACKEND_IMAGE is required}
+    env_file: ${APP_ENV_FILE:-/opt/customer-intelligence/.env}
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: ${POSTGRES_DB}
+      DB_USER: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+    command: ["python", "-m", "backend.migrate"]
+    restart: "no"
+    depends_on:
+      postgres: {condition: service_healthy}
+
+  backend:
+    image: ${BACKEND_IMAGE:?BACKEND_IMAGE is required}
+    env_file: ${APP_ENV_FILE:-/opt/customer-intelligence/.env}
+    restart: unless-stopped
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: ${POSTGRES_DB}
+      DB_USER: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      MODEL_PROFILE: local
+      AGENT_MODEL_PROVIDER: vllm
+      AGENT_MODEL_BASE_URL: http://${GPU_PRIVATE_IP}:8000/v1
+      REVIEW_EXTRACTOR_MODEL_PROVIDER: vllm
+      REVIEW_EXTRACTOR_MODEL_BASE_URL: http://${GPU_PRIVATE_IP}:8002/v1
+      RAG_EVIDENCE_MODEL_PROVIDER: vllm
+      RAG_EVIDENCE_MODEL_BASE_URL: http://${GPU_PRIVATE_IP}:8002/v1
+      RAG_EMBEDDING_PROVIDER: remote_bge_m3
+      RAG_EMBEDDING_MODEL: BAAI/bge-m3
+      RAG_EMBEDDING_DIMENSIONS: "1024"
+      RAG_EMBEDDING_BASE_URL: http://${GPU_PRIVATE_IP}:8003
+      RAG_RERANKER_ENABLED: "true"
+      RAG_RERANKER_BASE_URL: http://${GPU_PRIVATE_IP}:8003
+    ports: ["127.0.0.1:8000:8000"]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      redis: {condition: service_healthy}
+
+  frontend:
+    image: ${FRONTEND_IMAGE:?FRONTEND_IMAGE is required}
+    restart: unless-stopped
+    environment:
+      BACKEND_URL: http://backend:8000
+    ports: ["127.0.0.1:3000:3000"]
+    depends_on:
+      backend: {condition: service_started}
+
+volumes:
+  postgres_data:
+  redis_data:

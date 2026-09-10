@@ -91,3 +91,20 @@ class BGEM3ColbertReranker:
         if len(result) != len(passages):
             raise ValueError("ColBERT 점수 수와 후보 문서 수가 다릅니다.")
         return result
+
+    def embed(self, texts: Sequence[str]) -> list[list[float]]:
+        """같은 BGE-M3 가중치에서 dense vector만 반환한다."""
+        if not texts:
+            return []
+        encoded = self._get_model().encode(
+            list(texts),
+            batch_size=self.settings.reranker_batch_size,
+            max_length=self.settings.reranker_passage_max_tokens,
+            return_dense=True,
+            return_sparse=False,
+            return_colbert_vecs=False,
+        )
+        return [
+            [float(value) for value in vector]
+            for vector in encoded["dense_vecs"]
+        ]

@@ -15,8 +15,8 @@ from src.cache.review_cache import (
 )
 
 from src.analysis.taxonomy import REVIEW_TOPICS
-from src.model_clients import build_structured_model
-from src.model_config import ModelRole, ModelRoutingSettings
+from src.llm.clients import build_structured_model
+from src.llm.config import ModelRole, ModelRoutingSettings
 
 
 load_dotenv()
