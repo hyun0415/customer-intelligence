@@ -24,12 +24,8 @@ if ($LASTEXITCODE -ne 0 -or -not $AccountId) {
     throw "Failed to resolve the AWS account for profile '$AwsProfile'."
 }
 $Registry = "$AccountId.dkr.ecr.$Region.amazonaws.com"
-$LoginPassword = aws ecr get-login-password --profile $AwsProfile --region $Region
-if ($LASTEXITCODE -ne 0 -or -not $LoginPassword) {
-    throw "Failed to obtain an ECR login password."
-}
-$LoginPassword | docker login --username AWS --password-stdin $Registry
-$LoginPassword = $null
+$LoginCommand = "aws ecr get-login-password --profile `"$AwsProfile`" --region `"$Region`" | docker login --username AWS --password-stdin `"$Registry`""
+cmd.exe /d /s /c $LoginCommand
 if ($LASTEXITCODE -ne 0) { throw "Docker login to ECR failed." }
 
 $Images = [ordered]@{
