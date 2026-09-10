@@ -2,7 +2,9 @@ param(
     [ValidateSet("app", "gpu")][string]$Target,
     [string]$AwsProfile = "terra-user",
     [string]$Region = "ap-northeast-2",
-    [string]$Tag = ""
+    [string]$Tag = "",
+    [ValidateRange(1, 120)][int]$TimeoutMinutes = 30,
+    [ValidateRange(5, 60)][int]$PollSeconds = 10
 )
 
 $ErrorActionPreference = "Stop"
@@ -37,6 +39,11 @@ $Prerequisite = if ($Target -eq "app") {
 } else {
     "true"
 }
+$ContainerCleanup = if ($Target -eq "gpu") {
+    "docker rm -f customer-intelligence-agent customer-intelligence-structured customer-intelligence-bge-m3 >/dev/null 2>&1 || true"
+} else {
+    "true"
+}
 $RemoteCommand = @"
 set -e
 mkdir -p /opt/customer-intelligence
@@ -44,7 +51,8 @@ $Prerequisite
 echo '$ComposeBase64' | base64 -d > '$RemoteCompose'
 aws ecr get-login-password --region '$Region' | docker login --username AWS --password-stdin '$Registry'
 $Exports
-docker compose $EnvOption -f '$RemoteCompose' pull
+docker compose --progress quiet $EnvOption -f '$RemoteCompose' pull
+$ContainerCleanup
 docker compose $EnvOption -f '$RemoteCompose' up -d --remove-orphans
 docker compose $EnvOption -f '$RemoteCompose' ps
 "@
@@ -59,11 +67,27 @@ try {
     [IO.File]::WriteAllText($RequestPath, $Request, [Text.UTF8Encoding]::new($false))
     $CommandId = (aws ssm send-command --cli-input-json "file://$RequestPath" --profile $AwsProfile --region $Region --query "Command.CommandId" --output text).Trim()
     if ($LASTEXITCODE -ne 0 -or -not $CommandId) { throw "SSM command dispatch failed." }
-    aws ssm wait command-executed --command-id $CommandId --instance-id $InstanceId --profile $AwsProfile --region $Region
-    $WaitFailed = $LASTEXITCODE -ne 0
+    Write-Host "SSM deployment command: $CommandId"
+
+    $Deadline = (Get-Date).AddMinutes($TimeoutMinutes)
+    $PreviousStatus = ""
+    do {
+        $Status = (aws ssm get-command-invocation --command-id $CommandId --instance-id $InstanceId --profile $AwsProfile --region $Region --query Status --output text 2>$null).Trim()
+        if ($LASTEXITCODE -ne 0 -or -not $Status) { $Status = "Pending" }
+        if ($Status -ne $PreviousStatus) {
+            Write-Host "Remote deployment status: $Status"
+            $PreviousStatus = $Status
+        }
+        if ($Status -in @("Success", "Cancelled", "TimedOut", "Failed", "Cancelling")) { break }
+        if ((Get-Date) -ge $Deadline) {
+            throw "Remote deployment is still $Status after $TimeoutMinutes minutes. SSM command: $CommandId"
+        }
+        Start-Sleep -Seconds $PollSeconds
+    } while ($true)
+
     aws ssm get-command-invocation --command-id $CommandId --instance-id $InstanceId --profile $AwsProfile --region $Region --query "{Status:Status,Output:StandardOutputContent,Error:StandardErrorContent}"
     if ($LASTEXITCODE -ne 0) { throw "Failed to read the SSM deployment result." }
-    if ($WaitFailed) { throw "Remote deployment failed. See the SSM error above." }
+    if ($Status -ne "Success") { throw "Remote deployment ended with status $Status. See the SSM error above." }
 } finally {
     Remove-Item -LiteralPath $RequestPath -Force -ErrorAction SilentlyContinue
 }
