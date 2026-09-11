@@ -37,6 +37,24 @@
 5. 에이전트가 정량 통계, 실제 리뷰 근거, 표본 한계를 종합합니다.
 6. 주요 발견과 실행 가능한 개선안을 답변으로 제공합니다.
 
+### 고객 리뷰 분석 경로
+
+![고객 리뷰 분석 Agent의 모델 입력과 출력](docs/assets/diagrams/customer-review-agent-model-io.png)
+
+Agent는 질문에 맞는 검증된 SQL Tool을 선택합니다. Aspect Extractor가 조회된
+리뷰에서 불만 유형과 근거 문장을 구조화하면, Python 코드가 원문 존재 여부를
+확인하고 빈도와 표본 내 비율을 집계합니다. 최종 Agent는 검증된 집계 결과만
+사용해 반복 불만과 개선 우선순위를 설명합니다.
+
+### 정책 Hybrid RAG 경로
+
+![정책 Hybrid RAG 검색과 근거 판정](docs/assets/diagrams/policy-hybrid-rag-flow.png)
+
+정책 질문은 사용자 권한과 정책 유효 범위를 먼저 적용합니다. PostgreSQL FTS와
+Embedding 검색을 RRF로 결합하고, BGE-M3로 후보를 재정렬한 뒤 근거 유효성을
+판정합니다. 충분한 근거가 있는 정책만 답변에 사용하며, 근거 부족·정책 충돌·
+의료 및 안전 사안은 각각 정해진 안전 경로로 전환합니다.
+
 ## 주요 설계 원칙
 
 - ASIN이 주어지면 불필요한 상품 검색을 수행하지 않습니다.
@@ -67,26 +85,34 @@
 - **Rule Checker:** 근거 없는 수치, Tool 사용 실패, 표본·집계 기준 오류 검증
 - **LLM Judge:** 정확성, 근거성, 분석력, 업무 활용성을 각각 5점 척도로 평가
 
-### 최신 전체 평가 결과
+![평가 자동화와 역할별 모델 최적화](docs/assets/diagrams/evaluation-model-optimization-flow.png)
 
-| 평가 지표 | 결과 |
-|---|---:|
-| 완료된 시나리오 | 15 / 15 |
-| 실행 완료율 | 100% |
-| Tool 선택 성공 | 15 / 15 |
-| Tool precision | 1.00 |
-| 필수 Tool recall | 1.00 |
-| Tool F1 | 1.00 |
-| 금지 Tool 호출 | 0건 |
-| 등록되지 않은 Tool 호출 | 0건 |
-| Rule 조정 사례 | 0건 |
-| 평균 정확성 | 5.00 / 5.00 |
-| 평균 근거성 | 4.93 / 5.00 |
-| 평균 분석력 | 5.00 / 5.00 |
-| 평균 업무 활용성 | 5.00 / 5.00 |
-| 평균 종합 점수 | **4.98 / 5.00** |
+### 검증 범위와 해석
 
-전체 평가 당시 E03 모호한 검색 사례에서 `review_count`의 집계 출처를 Tool 근거 이상으로 설명해 근거성 4점을 받았습니다. 이후 검색 결과의 열 이름을 **조회된 리뷰 수**로 중립화하고, Amazon 전체 평점 수와의 관계를 임의로 설명하지 않도록 수정한 뒤 E03 회귀 테스트와 개별 재평가를 통과했습니다.
+15개 고정 시나리오는 기능 회귀와 모델 비교를 위한 기준 세트입니다. 모든 사례가
+통과했더라도 임의의 사용자 질문 전체에서 같은 성능을 보장한다는 의미는 아닙니다.
+따라서 단일 종합 점수보다 아래처럼 시스템이 보장하는 부분과 모델 품질로 남겨 둔
+부분을 구분해 평가합니다.
+
+| 검증 영역 | 확인한 내용 | 결과를 해석하는 범위 |
+|---|---|---|
+| Tool 호출 | 질문별 필수·선택·금지 Tool과 인자 비교 | 사전에 정의한 15개 업무 시나리오의 회귀 안정성 |
+| 수치 Grounding | 답변의 수치를 SQL Tool 결과와 대조 | 조회 결과에 없는 수치 생성을 탐지하며, 원천 데이터 자체의 정확성은 별도 관리 |
+| 리뷰 패턴 | Aspect 근거가 리뷰 원문에 존재하는지 확인한 뒤 Python 집계 | 최대 20개 선별 표본의 반복 불만이며 전체 고객 발생률로 해석하지 않음 |
+| 정책 RAG | 권한 필터, 검색·재정렬, 근거 충분성, 충돌·근거 부족 상태 평가 | 승인된 평가 문서와 질문 범위의 검색 품질이며 실제 운영 정책은 별도 검증 필요 |
+| 안전·권한 | 대화 소유권, RBAC, 의료·안전 escalation 확인 | 자동 판단을 제한하고 사람이 확인해야 할 사안을 분리하는 안전장치 |
+| 로컬 모델 통합 | Qwen3·GPT-OSS 상품 분석 경로와 AWS L40S의 BGE-M3 재정렬 점검 | 대표 경로의 실행 가능성을 확인한 smoke test이며 15개 전체 세트 결과는 아님 |
+
+초기 전체 평가에서는 E03 모호한 검색 사례가 `review_count`의 출처를 Tool 근거보다
+넓게 설명해 근거성 감점을 받았습니다. 이후 열 이름을 **조회된 리뷰 수**로
+중립화하고, Amazon 전체 평점 수와의 관계를 임의로 설명하지 않도록 수정했습니다.
+이 사례처럼 평가 점수 자체보다 실패 원인과 회귀 방지 규칙을 기록하는 데 평가 결과를
+사용합니다.
+
+현재 기록된 로컬 자동 검증에서는 상품 분석 1건을 완료했고, BGE-M3는 AWS L40S에서
+의료·안전 정책을 1순위로 재정렬했습니다. 정책 RAG 자동 검증 1건은 모델 품질이 아닌
+`tiktoken` 다운로드 네트워크 오류로 중단되었습니다. Gemma Judge를 포함한 로컬 전체
+평가 세트 재실행은 남은 검증 항목으로 분리합니다.
 
 ### 평가 시나리오
 
@@ -154,14 +180,13 @@ python -m eval.run_judge <evaluation-json-path>
 
 ## 향후 개선
 
-1. Google OAuth client callback 등록과 실제 로그인 통합 검증
-2. 관리자 권한·escalation 화면과 SSE 응답 streaming
+1. 관리자 권한·escalation 화면과 SSE 응답 streaming
+2. 로컬 정책 RAG 전체 경로와 Gemma Judge 평가 세트 재실행
 3. 리뷰 임베딩과 의미 기반 검색 고도화
 4. 기간·상품군·경쟁 제품 비교 분석 지원
-5. EKS 배포 설정과 운영 관측성 추가
-6. Web 연결 후 실제 GPU 모델 통합 검증
+5. EC2 배포 리허설과 운영 관측성 보완
 
-로컬 Qwen/Gemma 모델과 OpenAI API 전환 구조 및 Web 완성 후 GPU 검증 항목은
+로컬 Qwen/GPT-OSS/Gemma 모델과 OpenAI API 전환 구조 및 GPU 검증 항목은
 [`docs/local_model_runtime.md`](docs/local_model_runtime.md)에 정리되어 있습니다.
 Next.js, FastAPI, OIDC, RBAC 기반 Web 구조는
 [`docs/web_architecture.md`](docs/web_architecture.md)에 정리되어 있습니다.
@@ -199,10 +224,10 @@ manifest의 `approval_status`가 `APPROVED`인 유효 버전만 운영 검색 �
 ColBERT 재정렬 의존성은 별도로 설치합니다. 최초 실행 시 BGE-M3 모델을
 다운로드하며, 현재 기본 설정은 CPU와 작은 batch를 사용합니다.
 
-BGE-M3 재정렬 품질은 Colab A100에서 검증했으며, 기본 Web Docker 실행에서는
-로컬 자원 제약 때문에 비활성화되어 있습니다. 따라서 기본 Web은 PostgreSQL
-FTS·Embedding·RRF 결과와 LLM 근거 판정을 사용하고, BGE-M3를 실제 서비스 경로에
-포함할 때는 GPU 배포 환경에서 `runtime-reranker` 이미지를 별도로 검증합니다.
+BGE-M3 재정렬은 Colab A100 평가 세트와 AWS L40S의 단일 ranking·API smoke test로
+확인했습니다. 기본 Web Docker 실행에서는 로컬 자원 제약 때문에 비활성화되어
+있습니다. 따라서 기본 Web은 PostgreSQL FTS·Embedding·RRF 결과와 LLM 근거 판정을
+사용하며, GPU 배포에서는 `runtime-reranker` 이미지를 별도 서비스로 실행합니다.
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -r requirements-rag-rerank.txt
