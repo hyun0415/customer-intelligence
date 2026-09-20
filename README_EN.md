@@ -64,6 +64,41 @@ candidates before evidence sufficiency is assessed. Only supported policy text
 reaches the final answer. Missing evidence, conflicting policies, and medical or
 safety issues follow separate fail-closed or human-review paths.
 
+## Service Screens
+
+### Policy Grounding and Safe Abstention
+
+![A policy-grounded answer and a no-evidence response](docs/assets/screenshots/policy-grounding-and-no-evidence.png)
+
+When an approved policy directly supports the question, the response presents
+the applicable rule together with its source. If the retrieved documents do not
+support a key amount or condition, the agent does not infer an answer. Instead,
+it marks the response as **insufficient evidence** and directs the user to the
+responsible team for confirmation.
+
+### Product Analysis with Quantitative and Review Evidence
+
+![Rating distribution and major customer responses](docs/assets/screenshots/product-review-summary.png)
+
+The rating distribution is calculated from review texts stored in the analysis
+database and is explicitly separated from the total rating count in Amazon
+product metadata. Quantitative summaries are combined with expressions found in
+the underlying reviews to describe customer responses.
+
+![Recurring complaint patterns extracted from a low-rating review sample](docs/assets/screenshots/aspect-pattern-evidence.png)
+
+The agent extracts recurring complaint types from a helpful low-rating review
+sample and reports their counts and sample-level ratios with supporting spans.
+Before aggregation, Python verifies that each LLM-generated evidence span is
+present in the original review text.
+
+![Interpretation, recommended use, and sample limitations](docs/assets/screenshots/analysis-insights-and-limitations.png)
+
+The response distinguishes observed customer experiences from interpretation
+and potential business use. It also states the analysis scope and sample
+limitations so that sample-level ratios are not misrepresented as incidence
+rates across all reviews.
+
 ## Core Design Principles
 
 - Do not search for a product when an ASIN is already provided.
