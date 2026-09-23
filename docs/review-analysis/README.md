@@ -92,6 +92,66 @@ Aspect Extractor는 표본을 한꺼번에 요약하지 않고 리뷰를 한 건
 | `authenticity` | 정품·품질 의심 |
 | `skin_reaction` | 피부 이상 반응 |
 
+이 taxonomy는 Python이 리뷰에서 자동으로 학습하거나 생성한 분류 체계가 아닙니다.
+프로젝트에서 확인하려는 제품 품질·사용 경험을 기준으로 개발자가 Key, 표시 이름과
+정의를 미리 작성한 업무 규칙입니다. Python은 이 목록을 Extractor Prompt에 넣고,
+LLM은 리뷰의 의미와 각 정의를 비교해 해당 `topic`을 선택합니다.
+
+```python
+REVIEW_TOPICS = {
+    "packaging": {
+        "label": "포장 문제",
+        "description": "누액, 파손, 밀봉 등 포장 문제",
+    },
+    "odor": {
+        "label": "불쾌한 냄새",
+        "description": "불쾌하거나 강한 냄새에 관한 경험",
+    },
+    "ineffective": {
+        "label": "효과 부족",
+        "description": "기대한 효과가 나타나지 않은 경험",
+    },
+    # 나머지 허용 Aspect 생략
+}
+```
+
+역할은 다음과 같이 분리됩니다.
+
+| 주체 | 역할 |
+|---|---|
+| 개발자 | 분석할 Aspect와 각 항목의 정의를 taxonomy로 설계 |
+| LLM | 리뷰 문장을 해석하여 허용된 Aspect 중 해당 항목을 선택 |
+| Pydantic·Python | 허용된 Key인지 검사하고 잘못된 값은 결과에서 제외 |
+
+```text
+리뷰: “The bottle leaked all over the box.”
+정의: packaging = 누액, 파손, 밀봉 등 포장 문제
+LLM 선택: packaging
+Python 검증: 허용된 Key이므로 유지
+```
+
+반대로 LLM이 `bottle_leak`처럼 정의되지 않은 이름을 반환하면 Python 검증을 통과하지
+못해 집계에서 제외됩니다. 이 제한은 모델이나 표현이 달라져도 동일한 기준으로 빈도를
+계산하기 위한 출력 계약입니다.
+
+리뷰에 직접적인 근거가 없거나 내용이 위 taxonomy 중 어느 항목에도 해당하지 않으면
+Extractor는 `topics: []`를 반환합니다. 예를 들어 배송 지연처럼 현재 taxonomy에 없는
+불만은 리뷰 원문에 존재하더라도 Aspect 패턴으로 집계되지 않습니다.
+
+```text
+리뷰: “Delivery took two weeks.”
+정의된 Topic: 배송 지연 항목 없음
+LLM 결과: topics = []
+Python 집계: 표본 수에는 포함하지만 Aspect count에는 반영하지 않음
+Final Agent: 이 결과만으로 배송 지연을 반복 불만으로 생성하지 않음
+```
+
+빈 `topics`는 오류가 아니라 **현재 분석 범위에서 분류할 Aspect가 없다는 명시적인
+결과**입니다. 해당 리뷰는 표본 수에는 포함되지만 Aspect의 `count`, `ratio`와 evidence에는
+반영되지 않으며, 따라서 `ReviewPatternResult`를 받는 Final Agent도 이를 반복 불만으로
+설명하지 않습니다. 다른 리뷰 조회 Tool을 통해 원문이 별도로 전달되는 경우는 예외지만,
+Aspect 분석 경로만으로는 taxonomy 밖의 내용을 최종 답변에 생성하지 않는 것이 원칙입니다.
+
 ## 3. Python 원문 검증과 집계
 
 Extractor의 JSON을 그대로 집계하지 않습니다. 먼저 `evidence`와 리뷰의 제목·본문을

@@ -95,6 +95,72 @@ below.
 | `authenticity` | Authenticity or quality concern |
 | `skin_reaction` | Skin reaction |
 
+Python does not learn or generate this taxonomy from the reviews. The developer
+defines its keys, labels, and descriptions as business rules for the product
+quality and usage experiences the project intends to measure. Python places the
+taxonomy in the Extractor prompt, and the LLM compares the review with those
+definitions to select an allowed `topic`.
+
+```python
+REVIEW_TOPICS = {
+    "packaging": {
+        "label": "포장 문제",
+        "description": "누액, 파손, 밀봉 등 포장 문제",
+    },
+    "odor": {
+        "label": "불쾌한 냄새",
+        "description": "불쾌하거나 강한 냄새에 관한 경험",
+    },
+    "ineffective": {
+        "label": "효과 부족",
+        "description": "기대한 효과가 나타나지 않은 경험",
+    },
+    # Remaining allowed Aspects omitted
+}
+```
+
+Responsibilities are deliberately separated:
+
+| Owner | Responsibility |
+|---|---|
+| Developer | Design the Aspect taxonomy and define each category |
+| LLM | Interpret the review and select the applicable allowed Aspect |
+| Pydantic and Python | Enforce the allowed keys and discard invalid values |
+
+```text
+Review: “The bottle leaked all over the box.”
+Definition: packaging = leakage, breakage, and sealing problems
+LLM selection: packaging
+Python validation: keep because packaging is an allowed key
+```
+
+If the LLM instead returns an undefined label such as `bottle_leak`, Python
+validation prevents it from entering aggregation. This constraint is an output
+contract that keeps frequency calculations consistent across models and review
+wording.
+
+If a review contains no direct supporting evidence, or its content does not fit
+any item in this taxonomy, the Extractor returns `topics: []`. A delivery-delay
+complaint, for example, is not aggregated as an Aspect pattern even when it is
+explicitly present in the source review because delivery delay is outside the
+current taxonomy.
+
+```text
+Review: “Delivery took two weeks.”
+Defined Topic: no delivery-delay category
+LLM result: topics = []
+Python aggregation: include in sample size, but not in any Aspect count
+Final Agent: do not claim delivery delay as a recurring pattern from this result
+```
+
+An empty `topics` list is not an error. It explicitly means that the review has
+no Aspect within the current analytical scope. The review still contributes to
+the sample size, but it contributes nothing to Aspect `count`, `ratio`, or
+evidence. Consequently, the Final Agent cannot present it as a recurring pattern
+from `ReviewPatternResult`. A separate review-retrieval Tool may still expose the
+source text, but the Aspect-analysis path does not generate claims for
+out-of-taxonomy content.
+
 ## 3. Python Source Validation and Aggregation
 
 Extractor JSON is not aggregated as-is. Python lowercases the evidence and the
