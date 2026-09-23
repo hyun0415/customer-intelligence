@@ -2,277 +2,159 @@
 
 [한국어](README.md)
 
-A customer intelligence agent that analyzes product and review data to identify recurring complaints, product strengths and weaknesses, and evidence-based improvement priorities.
+Customer reviews contain valuable product-improvement signals, but practitioners
+must usually select reviews, calculate statistics, and search relevant policies
+in separate workflows. This project brings those tasks into one conversation so
+that users can examine **quantitative indicators, source-review evidence, and
+applicable internal policy together**.
 
-## Project Goal
+The system uses the flexibility of an LLM without delegating high-cost errors,
+such as numerical calculation and access control, to the model. Review metrics
+come from tested SQL Tools, while policy retrieval applies user permissions and
+validity dates before Hybrid RAG. The goal is to preserve natural-language
+convenience while reducing **fabricated numbers, unsupported policy guidance,
+and exposure of unauthorized documents**.
 
-The project is designed to reduce the amount of manual review reading and summarization required by marketing, product planning, and VOC teams. Users can ask natural-language questions and receive analyses such as:
+## Core Design
 
-- Product information and review overview
-- Rating distribution and low-rating ratio analysis
-- Helpful review and recurring complaint pattern analysis
-- Evidence-based product strength and weakness analysis
-- Product, detail-page, and operational improvement recommendations
-- Separation of defensible marketing messages from claims that should not be overstated
-- Safe handling of missing products and failed searches
+| Limitation to address | Design choice | Intended effect |
+|---|---|---|
+| LLM-generated SQL can change filters and aggregation criteria | Restrict the LLM to selecting tested SQL Tools | Produce quantitative results under consistent rules |
+| Rating statistics alone do not reveal concrete complaint causes | Extract aspects, sentiment, and evidence spans from low-rated reviews, then verify and aggregate them in Python | Connect recurring complaints and priorities to source reviews |
+| Keyword and semantic retrieval can miss different kinds of relevant policy | Fuse PostgreSQL FTS and embedding retrieval with RRF, then rerank with BGE-M3 MaxSim | Preserve both exact policy terminology and semantic similarity |
+| An LLM may answer even when retrieved evidence is insufficient | Classify evidence as `sufficient / insufficient / conflict` | Expose missing or conflicting evidence instead of inventing guidance |
+| Uniform policy access can expose documents outside a user's scope | Enforce collection, jurisdiction, department, and RBAC filters on the server | Retrieve only authorized and currently valid policy |
+| A high aggregate score alone does not explain operational reliability | Evaluate Tool accuracy, numerical grounding, evidence quality, and business usefulness | Compare model quality and cost under the same contract |
 
-## Data
+## Implementation Scope
 
-- Dataset: Amazon Reviews 2023
-- Category: Beauty and Personal Care
-- Products: 547
-- Reviews: 105,060
-- Negative or neutral reviews rated 3 stars or below: 25,152
+The analysis dataset contains 547 Beauty and Personal Care products and 105,060
+reviews from Amazon Reviews 2023. Review analysis, policy retrieval, evidence
+assessment, and access control are connected to Google OIDC, Redis sessions, and
+conversation ownership, making the project an **MVP for validating an operational
+workflow rather than a standalone RAG demonstration**.
 
-Amazon Reviews 2023 is a public research dataset rather than synthetic customer
-data. The repository does not redistribute the full raw review corpus; it provides
-the processing and ingestion code needed to reproduce the database. The included
-policy documents are synthetic samples created for this portfolio project and do
-not represent an actual company's internal policies.
+## System Flows
 
-`rating_number` represents the total number of ratings shown in Amazon product metadata. `review_count` represents the number of review texts stored in the analysis database.
-
-When the aggregation source is not explicitly included in a Tool response, the agent describes `review_count` as the **retrieved review count** instead of making unsupported claims about its relationship to Amazon's total rating count.
-
-## How It Works
-
-1. The user asks a question about a product or customer response.
-2. The agent selects the required retrieval and analysis Tools.
-3. The Tools query product and review data from PostgreSQL.
-4. The review pattern pipeline runs when recurring complaint analysis is required.
-5. The agent combines quantitative statistics, review evidence, and sample limitations.
-6. The final response provides key findings and actionable recommendations.
-
-### Customer Review Analysis Path
+### Customer review analysis
 
 ![Model inputs and outputs in the customer review analysis Agent](docs/assets/diagrams/customer-review-agent-model-io.png)
 
-The Agent selects a predefined and tested SQL Tool instead of generating SQL.
-The Aspect Extractor structures complaint types and evidence spans from the
-retrieved reviews. Python then verifies that each evidence span exists in the
-source text and aggregates frequency and sample-level ratios. The final Agent
-uses only the verified result to explain recurring complaints and improvement
-priorities.
+The Agent selects a predefined SQL Tool and PostgreSQL returns the requested
+sample and statistics. The Aspect Extractor structures complaint types and
+evidence spans. Python verifies that each span exists in the original review and
+aggregates counts and sample-level ratios. The final Agent consumes only the
+validated structured result.
 
-### Policy Hybrid RAG Path
+### Policy Hybrid RAG
 
 ![Policy Hybrid RAG retrieval and evidence assessment](docs/assets/diagrams/policy-hybrid-rag-flow.png)
 
-Policy retrieval first applies the user's access scope and policy validity rules.
-PostgreSQL FTS and embedding retrieval are fused with RRF, and BGE-M3 reranks the
-candidates before evidence sufficiency is assessed. Only supported policy text
-reaches the final answer. Missing evidence, conflicting policies, and medical or
-safety issues follow separate fail-closed or human-review paths.
+The retriever first enforces approval status, validity period, product scope,
+collection, jurisdiction, department, and user access. PostgreSQL FTS and
+embedding retrieval independently find Child chunks. RRF fuses them by Parent,
+BGE-M3 reranks the Parent sections, and a structured LLM classifies evidence as
+`sufficient`, `insufficient`, or `conflict`.
+
+Candidate counts, Child/Parent responsibilities, policy priority, and failure
+behavior are documented in the [Policy RAG guide](docs/rag/README_EN.md).
 
 ## Service Screens
 
-### Policy Grounding and Safe Abstention
+| Policy grounding and abstention | Review statistics and complaint patterns |
+|---|---|
+| ![Policy grounding and insufficient evidence](docs/assets/screenshots/policy-grounding-and-no-evidence.png) | ![Recurring complaint aspects](docs/assets/screenshots/aspect-pattern-evidence.png) |
 
-![A policy-grounded answer and a no-evidence response](docs/assets/screenshots/policy-grounding-and-no-evidence.png)
+When policy evidence is insufficient, the system returns `no_evidence` instead
+of inventing a rule. Review-pattern ratios are explicitly described as ratios
+within the selected sample, not population incidence.
 
-When an approved policy directly supports the question, the response presents
-the applicable rule together with its source. If the retrieved documents do not
-support a key amount or condition, the agent does not infer an answer. Instead,
-it marks the response as **insufficient evidence** and directs the user to the
-responsible team for confirmation.
+## Design Principles
 
-### Product Analysis with Quantitative and Review Evidence
+- Code enforces SQL accuracy, policy access, source grounding, and safety boundaries.
+- Model interpretation quality is managed through model replacement and evaluation.
+- Responses must not invent numbers, policy conditions, causality, or safety claims.
+- Equal-priority policy conflicts are never resolved arbitrarily by the Agent.
+- Medical and safety cases leave the normal answer path for human review.
+- OpenAI and local models share the same Tool, schema, and evaluation contracts.
 
-![Rating distribution and major customer responses](docs/assets/screenshots/product-review-summary.png)
+## Technology
 
-The rating distribution is calculated from review texts stored in the analysis
-database and is explicitly separated from the total rating count in Amazon
-product metadata. Quantitative summaries are combined with expressions found in
-the underlying reviews to describe customer responses.
+| Area | Technology |
+|---|---|
+| Agent and LLM | Python, LangGraph, LangChain, OpenAI API, vLLM |
+| Analysis | SQL, pandas, Pydantic, Aspect Term Extraction |
+| RAG | PostgreSQL FTS, pgvector, RRF, BGE-M3 ColBERT MaxSim |
+| Web | FastAPI, Next.js, TypeScript |
+| Identity and state | Google OIDC, Redis, HttpOnly cookies, PostgreSQL audit logs |
+| Deployment and evaluation | Docker Compose, Terraform, EC2, ECR, pytest, LLM Judge |
 
-![Recurring complaint patterns extracted from a low-rating review sample](docs/assets/screenshots/aspect-pattern-evidence.png)
+## Evaluation and Interpretation
 
-The agent extracts recurring complaint types from a helpful low-rating review
-sample and reports their counts and sample-level ratios with supporting spans.
-Before aggregation, Python verifies that each LLM-generated evidence span is
-present in the original review text.
+The project separates guarantees enforced by code from language quality that
+remains model-dependent instead of presenting one near-perfect aggregate score.
 
-![Interpretation, recommended use, and sample limitations](docs/assets/screenshots/analysis-insights-and-limitations.png)
-
-The response distinguishes observed customer experiences from interpretation
-and potential business use. It also states the analysis scope and sample
-limitations so that sample-level ratios are not misrepresented as incidence
-rates across all reviews.
-
-## Core Design Principles
-
-- Do not search for a product when an ASIN is already provided.
-- Do not add rating, date, or review-count filters that the user did not request.
-- Do not infer complaint causes or customer experiences from rating distributions alone.
-- Separate reviewer experiences and claims from verified product information.
-- Preserve the category labels returned by the Pattern Tool.
-- Distinguish sample-level ratios from population-level incidence rates.
-- Do not present unverified authenticity, safety, or causal claims as facts.
-
-## Tech Stack
-
-- Python
-- LangGraph / LangChain
-- OpenAI API
-- PostgreSQL / pgvector
-- Docker Compose
-- vLLM / Qwen3 / GPT-OSS / Gemma / BGE-M3
-- pandas / Parquet
-- pytest
-
-## Agent Evaluation
-
-The agent was evaluated on 15 customer and product analysis scenarios using a live PostgreSQL database and the OpenAI API.
-
-The evaluation framework has three layers:
-
-- **Tool evaluation:** validates required, optional, and forbidden Tools and their arguments
-- **Rule Checker:** detects unsupported numbers, Tool failures, and sample or aggregation mistakes
-- **LLM Judge:** scores accuracy, grounding, analysis, and actionability on a five-point scale
-
-![Automated evaluation and role-specific model optimization](docs/assets/diagrams/evaluation-model-optimization-flow.png)
-
-### Validation Scope and Interpretation
-
-The 15 fixed scenarios form a regression and model-comparison baseline. Passing
-all of them does not imply equivalent performance across every possible user
-question. The project therefore reports what each check establishes and where
-its conclusions stop, rather than presenting one near-perfect aggregate score.
-
-| Validation area | What is checked | Interpretation boundary |
+| Layer | What it checks | Interpretation boundary |
 |---|---|---|
-| Tool calls | Required, optional, and forbidden Tools and their arguments | Regression stability for 15 predefined business scenarios |
-| Numeric grounding | Numbers in the response are compared with SQL Tool output | Detects unsupported numbers; source-data accuracy is managed separately |
-| Review patterns | Evidence spans are checked against review text before Python aggregation | Ratios describe a selected sample of up to 20 reviews, not population incidence |
-| Policy RAG | Access filters, retrieval, reranking, evidence sufficiency, conflict, and no-evidence states | Measures approved evaluation documents and questions; production policies require separate validation |
-| Safety and access | Conversation ownership, RBAC, and medical or safety escalation | Prevents unsupported automated decisions and routes high-risk cases to a person |
-| Local-model integration | Qwen3 and GPT-OSS review analysis plus BGE-M3 reranking on AWS L40S | A representative-path smoke test, not the full 15-case benchmark |
+| Tool | Required, optional, and forbidden Tools and arguments | Routing regression for defined business scenarios |
+| Rule checker | Unsupported SQL numbers, evidence spans, and sample wording | Violations of system invariants |
+| Policy RAG | Access, retrieval, reranking, sufficiency, and conflict states | Approved evaluation policies and questions |
+| LLM Judge | Accuracy, grounding, analysis, and actionability | Relative model comparison and failure analysis |
+| Security and safety | Ownership, RBAC, and escalation | Boundaries that restrict automated decisions |
 
-In the initial full evaluation, E03 overexplained the source of `review_count`
-beyond the Tool evidence and lost a grounding point. The wording was changed to
-**retrieved review count**, and the regression test now prevents assumptions
-about its relationship to Amazon's total rating count. This illustrates how the
-evaluation is used to record failure causes and preserve fixes rather than merely
-maximize a score.
+The suite includes 15 customer and product scenarios plus stage-by-stage policy
+RAG evaluation. Passing the fixed set does not guarantee performance for every
+possible query, so failures and regression rules are recorded together. See the
+[evaluation guide](eval/README_EN.md) for commands and outputs.
 
-The recorded local automation completed one product-analysis case. BGE-M3 ranked
-the medical and safety policy first in an AWS L40S smoke test. One automated local
-policy-RAG case stopped because a network restriction prevented a `tiktoken`
-download, not because of a model-quality failure. A full local rerun with the
-Gemma Judge remains an explicit follow-up.
+## Quick Start
 
-### Evaluation Coverage
+From the repository root, copy `.env.example` and keep real secrets only in the
+ignored `.env` file.
 
-The evaluation set covers:
+```powershell
+Copy-Item .env.example .env
+docker compose --env-file .env `
+  -f deploy/compose/local-infra.yaml `
+  -f deploy/compose/local-app.yaml up --build
+```
 
-- Product lookup and product-name search
-- Ambiguous search with multiple candidates
-- Rating distribution and low-rating ratios
-- Complaint analysis based on highly helpful low-rating reviews
-- Natural-language condition translation into Tool arguments
-- Recurring complaint and review pattern analysis
-- Product strengths, weaknesses, and improvement recommendations
-- Marketing claim validation and overstatement risk
-- Statistical interpretation and sample limitations
-- Missing-product and empty-search handling
+- Web: `http://localhost:3000`
+- API readiness: `http://localhost:8000/api/ready`
 
-### Representative Cases
-
-| Case | Capability | Result |
-|---|---|---|
-| E03 | Multiple candidates for an ambiguous search | Filters out a non-product result and returns several candidates with ASINs |
-| E05 | VOC analysis from helpful low-rating reviews | Connects recurring complaint frequency, evidence, impact, and improvements while stating sample limitations |
-| E09 | Combined product, rating, and review-pattern analysis | Produces strengths, weaknesses, and action items from quantitative and qualitative evidence |
-| E11 | Marketing analysis | Uses helpful reviews and complaint patterns to separate supportable messages from claims that should not be overstated |
-| E15 | Search failure and hallucination prevention | Does not substitute a nonexistent product and requests additional identifying information |
-
-## Testing
-
-Run the full test suite:
+Start the core regression checks with:
 
 ```powershell
 pytest -q
-```
-
-Run selected Agent integration tests:
-
-```powershell
-pytest tests/test_agent.py -q -k "ambiguous_product_name"
-pytest tests/test_agent.py -q -k "marketing_analysis"
-```
-
-Run the Agent evaluation and LLM Judge through the `eval/` module:
-
-```powershell
 python -m eval.run_agent_evaluation
-python -m eval.run_judge <evaluation-json-path>
+python -m eval.rag_pipeline_comparison --stages baseline,rerank,full
 ```
 
-Integration tests and evaluations call the OpenAI API and therefore require available API credits.
+Agent and full RAG evaluations require PostgreSQL data and OpenAI API settings.
+Detailed options, paid validation paths, and local-model commands are kept in
+the focused guides below.
 
-## Project Status
+## Documentation
 
-Completed work includes:
+| Guide | Scope |
+|---|---|
+| [Policy RAG](docs/rag/README_EN.md) | Ingestion, Child/Parent retrieval, RRF, BGE-M3, priority, and evidence gating |
+| [Evaluation](eval/README_EN.md) | Agent, Tool, Judge, RAG, and local-model evaluation commands and outputs |
+| [Run and deploy](deploy/README_EN.md) | Local Compose, ECR image publishing, and EC2 deployment |
+| [Terraform](infra/terraform/README_EN.md) | Cost-safe defaults, EC2 provisioning, SSM access, and teardown |
+| [Web architecture](docs/web_architecture.md) | Next.js, FastAPI, OIDC, sessions, and RBAC boundaries |
+| [Model runtime](docs/local_model_runtime.md) | OpenAI, Qwen, GPT-OSS, and Gemma roles and switching |
+| [Architecture decision](docs/adr/001-hybrid-sql-rag-architecture.md) | Why SQL and Hybrid RAG are separated |
 
-- Parquet-to-PostgreSQL data loading and data quality checks
-- Product and review retrieval Tools
-- LangGraph Agent and Tool-routing rules
-- Recurring complaint Pattern analysis pipeline
-- Fifteen evaluation scenarios and automated evaluation workflow
-- Numeric Checker, Rule Checker, and LLM Judge
-- Regression tests for Agent Tool routing and grounding
-- FastAPI Agent API and Next.js conversation interface
-- Google OIDC login, Redis sessions, three-level RBAC, and policy-scope enforcement
-- Separate frontend, backend, reranker, and vLLM container configurations
+## Data and Publication Scope
 
-## Roadmap
+- Amazon Reviews 2023 is a public research dataset; the full raw corpus is not redistributed here.
+- Included sample policies are synthetic portfolio data, not real company policy.
+- Real `.env` files, OAuth secrets, API keys, database contents, and Terraform state are not embedded in images or Git.
 
-1. Add streaming responses and finish the escalation-management workflow
-2. Rerun the full local policy-RAG path and Gemma Judge evaluation set
-3. Improve semantic review search with embeddings
-4. Support time-range, product-group, and competitor comparisons
-5. Complete one final EC2 deployment rehearsal and improve observability
+## Status
 
-## Notes
-
-Local model roles and runtime settings are documented in
-[`docs/local_model_runtime.md`](docs/local_model_runtime.md). Web authentication,
-session, and authorization boundaries are documented in
-[`docs/web_architecture.md`](docs/web_architecture.md).
-
-## Source Data
-
-The agent combines deterministic SQL retrieval for structured product and
-review data with hybrid RAG for internal operational policies. PostgreSQL FTS
-and pgvector generate candidates, BGE-M3 multi-vector scoring reranks them with
-ColBERT late interaction, and a structured LLM check permits only directly
-supported evidence to reach the Agent.
-
-Install the optional local reranking dependencies before running policy search:
-
-```powershell
-.\.venv\Scripts\python.exe -m pip install -r requirements-rag-rerank.txt
-```
-
-Compare the PostgreSQL baseline, ColBERT reranking, and full evidence-validation
-pipeline with the same fixed Korean cases:
-
-```powershell
-python -m eval.rag_pipeline_comparison
-```
-
-JSON and CSV reports are written under `eval/results/` without applying an
-arbitrary acceptance threshold.
-
-The BGE-M3 stage was evaluated with a Colab A100 retrieval set and a single
-ranking and API smoke test on AWS L40S. It remains disabled in the default local
-Web stack because of resource constraints and runs as a separate GPU service in
-the AWS configuration.
-
-The evaluated default is 10 candidates per retrieval channel. Reranker
-failures fall back to RRF order by default
-(`RAG_RERANKER_FALLBACK_TO_RRF=true`), while evidence-validation failures
-remain fail-closed as `no_evidence`. The evidence timeout/retry defaults are 15
-seconds and one retry.
-
-See [ADR-001](docs/adr/001-hybrid-sql-rag-architecture.md).
+The OpenAI Web, Agent, policy retrieval path, and core regression tests are
+implemented. Representative Qwen3 and GPT-OSS product-analysis paths and the
+BGE-M3 reranking API were smoke-tested on AWS L40S. A full local-model evaluation
+run and production-grade observability and streaming remain follow-up work.

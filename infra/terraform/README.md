@@ -1,159 +1,154 @@
-# EC2 deployment and local-model validation
+# Terraform 검증 환경
 
-This Terraform root provisions a small, disposable validation environment for
-the Customer Intelligence monorepo. It deliberately does not create EKS, NAT
-Gateways, RDS, ElastiCache, a public load balancer, or DNS records.
+[English](README_EN.md) · [프로젝트 홈](../../README.md) · [배포 안내](../../deploy/README.md)
 
-## Architecture
+Customer Intelligence 모노레포의 짧은 AWS 검증을 위한 일회성 EC2 환경입니다.
+EKS, NAT Gateway, RDS, ElastiCache, public Load Balancer와 DNS를 만들지 않습니다.
+
+## 구조
 
 ```text
-SSM port forwarding
-        |
-public subnet, no public inbound rules
-        |
-        +-- CPU EC2: ECR images for Next.js + FastAPI, PostgreSQL + Redis
-        |      |
-        |      +-- TCP 8000-8003 through security-group reference only
-        |             |
-        +-- GPU EC2: vLLM, one validation model at a time
+개발 PC
+  └─ AWS Systems Manager Session Manager
+       ├─ CPU EC2: Next.js + FastAPI + PostgreSQL + Redis
+       └─ GPU EC2: vLLM + BGE-M3
 ```
 
-Both root volumes are encrypted and deleted with their instances. Public IPs
-are used only to avoid a billable NAT Gateway while downloading packages and
-model artifacts. The security groups expose no inbound port to the internet.
+두 호스트는 public subnet을 사용하지만 Security Group에 인터넷 inbound 규칙이
+없습니다. public IP는 NAT Gateway 없이 이미지·모델을 내려받기 위한 outbound
+경로이며, 관리 접속은 SSH 대신 SSM을 사용합니다.
 
-## Safety defaults
+## 비용·보안 기본값
 
-- `enable_stack=false` creates no AWS resources.
-- CPU and GPU hosts have independent switches.
-- Application images are built once on the development machine, stored in
-  private ECR repositories, and pulled by EC2. EC2 does not clone the source
-  repository or rebuild images.
-- No API key, Google secret, Hugging Face token, or application `.env` is passed
-  through Terraform or EC2 user-data.
-- The first GPU validation should use On-Demand. Spot is opt-in because it may
-  be interrupted during a benchmark.
+- `enable_stack=false`: AWS 리소스를 생성하지 않는 master switch
+- CPU와 GPU 생성 여부를 독립적으로 선택
+- GPU 기본값은 On-Demand이며 Spot은 명시적으로 선택할 때만 사용
+- 애플리케이션 이미지에는 commit SHA tag를 사용
+- API Key, Google Secret, Hugging Face Token과 `.env`는 Terraform에 전달하지 않음
+- root EBS는 암호화하고 인스턴스와 함께 삭제하도록 구성
+- ECR은 검증 종료 시 이미지가 있어도 삭제할 수 있도록 설정 가능
 
-## Prepare without creating resources
+`terraform.tfvars.example`은 실제 검증 예시라 host switch가 켜져 있습니다. 복사한
+직후 값을 그대로 apply하지 말고 비용과 실행 범위를 확인합니다.
 
-1. Confirm the selected Region has the desired GPU capacity and request the
-   appropriate EC2 `P` or `G` vCPU quota before scheduling the test.
-2. By default Terraform resolves the current x86_64 AWS Deep Learning Base GPU
-   AMI from its public SSM parameter in the selected Region. Set `gpu_ami_id`
-   only when an evaluation must pin a specific AMI release.
-3. Copy `terraform.tfvars.example` to the ignored `terraform.tfvars`, set the
-   profile, Region, and desired host switches.
-4. Pin `vllm_image` to the exact tag or digest used for recorded evaluation.
-
-Run only static initialization and planning until the validation window is
-approved:
+## 1. 준비와 정적 검증
 
 ```powershell
 Set-Location C:\Users\PCuser\Desktop\customer-intelligence\infra\terraform
+Copy-Item terraform.tfvars.example terraform.tfvars
+```
+
+처음에는 다음처럼 리소스 생성을 막아둡니다.
+
+```hcl
+enable_stack        = false
+create_cpu_instance = false
+create_gpu_instance = false
+```
+
+초기화와 정적 검증:
+
+```powershell
 terraform init
 terraform fmt -check -recursive
 terraform validate
 terraform plan -out=customer-intelligence.tfplan
 ```
 
-Do not use `-auto-approve`. Verify the AWS account, Region, instance types,
-volume sizes, and that no unexpected resource appears in the saved plan.
+저장된 plan에서 계정, 서울 리전, instance type, EBS 크기와 생성·삭제 대상 개수를
+확인합니다. 검증 단계에서는 `-auto-approve`를 사용하지 않습니다.
 
-## Access through SSM
+## 2. 생성
 
-The instances have no SSH ingress. Start a shell through AWS Systems Manager:
+필요한 검증 호스트만 켭니다.
+
+```hcl
+enable_stack        = true
+create_cpu_instance = true
+create_gpu_instance = true
+```
+
+GPU만 필요하면 `create_cpu_instance=false`, CPU만 필요하면
+`create_gpu_instance=false`로 설정합니다.
+
+```powershell
+terraform plan -out=customer-intelligence.tfplan
+terraform apply .\customer-intelligence.tfplan
+terraform output
+```
+
+`g6e.2xlarge`는 서울 리전의 G·VT On-Demand vCPU quota와 실제 가용 용량이 모두
+필요합니다. quota가 충분해도 선택 AZ에 장비가 없으면 용량 오류가 발생할 수 있습니다.
+
+## 3. SSM 접속과 Port Forwarding
+
+GPU shell:
 
 ```powershell
 $gpuId = terraform output -raw gpu_instance_id
-aws ssm start-session --target $gpuId --profile terra-user --region ap-northeast-2
+aws ssm start-session --target $gpuId `
+  --profile terra-user `
+  --region ap-northeast-2
 ```
 
-For a local application calling the remote GPU, forward local port 8001 to
-vLLM port 8000:
+GPU의 vLLM 8000 포트를 개발 PC의 8001로 전달합니다.
 
 ```powershell
 $gpuId = terraform output -raw gpu_instance_id
 $parameters = '{"portNumber":["8000"],"localPortNumber":["8001"]}'
-aws ssm start-session --target $gpuId --document-name AWS-StartPortForwardingSession --parameters $parameters --profile terra-user --region ap-northeast-2
+aws ssm start-session --target $gpuId `
+  --document-name AWS-StartPortForwardingSession `
+  --parameters $parameters `
+  --profile terra-user `
+  --region ap-northeast-2
 ```
 
-Use `http://localhost:8001/v1` for a host-run backend or
-`http://host.docker.internal:8001/v1` for the existing Docker backend.
+- 호스트에서 실행하는 Backend: `http://localhost:8001/v1`
+- Docker Backend: `http://host.docker.internal:8001/v1`
 
-## Publish and deploy immutable images
+정상 배포 경로는 [deploy 스크립트](../../deploy/README.md)를 사용합니다. SSM shell의
+수동 모델 명령은 장애 진단용으로만 사용합니다.
 
-Terraform creates private ECR repositories for `backend`, `frontend`, and
-`reranker`. Commit the tested source first, then publish images tagged with the
-commit SHA:
+## 4. 모델 프로필
 
-```powershell
-.\deploy\scripts\publish-images.ps1 -AwsProfile terra-user
-```
-
-The real `.env` is never built into an image, committed, or passed through
-Terraform. Create `/opt/customer-intelligence/.env` on the CPU host through an
-approved secret-delivery path. Then deploy the GPU and application hosts:
-
-```powershell
-.\deploy\scripts\deploy-aws.ps1 -Target gpu -AwsProfile terra-user
-.\deploy\scripts\deploy-aws.ps1 -Target app -AwsProfile terra-user
-```
-
-The backend image applies ordered files from `db/migrations` before the API
-starts. Product/review rows and approved policy content are data, not schema;
-restore them separately from an encrypted, access-controlled database backup.
-
-## Deliberate model start (diagnostic fallback)
-
-Inside the GPU Session Manager shell, export a Hugging Face token only when a
-model requires it, then start a role profile. A vLLM start replaces only the
-existing vLLM container, so the BGE-M3 reranker can remain loaded separately:
-
-```bash
-export HF_TOKEN='temporary-session-token'
-ci-model-run aspect
-docker logs -f customer-intelligence-vllm
-```
-
-The fixed profiles are:
-
-| Profile | Model | Precision | Context |
-| --- | --- | --- | ---: |
+| 프로필 | 모델 | 형식 | 기본 Context |
+|---|---|---|---:|
 | `aspect`, `evidence` | `Qwen/Qwen3-8B` | BF16 | 8,192 |
 | `agent` | `openai/gpt-oss-20b` | MXFP4 | 16,384 |
 | `evaluator` | `pytorch/gemma-3-27b-it-FP8` | FP8 | 8,192 |
 | `ci-bge-m3-smoke` | `BAAI/bge-m3` | FP16 | 2,048 test input |
 
-Stop or change profiles with:
+진단용 GPU shell 명령:
 
 ```bash
-ci-model-stop
-ci-model-run agent
 ci-model-status
+ci-model-run agent
+docker logs -f customer-intelligence-vllm
+ci-model-stop
 ```
 
-The `agent` profile limits vLLM to 50% of GPU memory for the agreed single-GPU
-coexistence layout.
-Use `ci-vllm-stop` or `ci-bge-m3-stop` to stop one container, and
-`ci-model-stop` to stop both.
+`ci-model-run`은 같은 vLLM 자리를 사용하는 기존 모델을 내리고 선택한 모델을
+시작합니다. BGE-M3는 별도 서비스이므로 통합 검증에서 GPT-OSS와 함께 유지할 수
+있습니다. 모델 revision, vLLM image, dtype, context, cold start, p50/p95, JSON 성공률과
+peak GPU memory를 결과에 기록합니다.
 
-The normal integration path uses `deploy/scripts/deploy-aws.ps1`; no GitHub
-credentials or source checkout is required on EC2. The CPU application uses
-the Terraform outputs for the Agent (`:8000/v1`),
-shared Qwen structured service (`:8002/v1`), and BGE-M3 reranker (`:8003`).
+## 5. 이미지 배포와 검증
 
-Run the fixed project evaluation set for Qwen3-8B structured roles, GPT-OSS
-20B Agent, Gemma evaluator, and BGE-M3 retrieval/reranking. GPT-OSS and BGE-M3
-may coexist for integration validation; the other large profiles remain
-sequential. Persist each stage's result before changing profiles. Record model
-revision, vLLM image, dtype or quantization, context length, cold start, p50/p95
-latency, JSON success, task accuracy, and peak GPU memory. Use a 4-bit model
-only if an FP8 profile cannot fit after reducing concurrency or context.
+Terraform은 Backend, Frontend와 Reranker용 private ECR을 생성합니다. 실제 build와
+배포 명령은 [실행·배포 안내](../../deploy/README.md)에만 유지합니다.
 
-## Teardown
+검증 완료 기준:
 
-After exporting evaluation results, review a fresh destroy plan and apply that
-saved plan:
+- CPU·GPU 서비스 healthcheck 통과
+- 상품 분석 1건에서 SQL 수치와 Aspect 원문 근거 확인
+- 정책 RAG 1건에서 권한·재정렬·근거 판정 확인
+- 결과 파일을 로컬로 보존한 뒤 비용 자원 종료
+
+## 종료와 삭제
+
+잠시 중단하는 것과 완전히 반납하는 것은 다릅니다. EC2를 stop해도 EBS와 일부
+네트워크 자원 비용은 계속 발생할 수 있습니다. 검증을 마쳤다면 fresh destroy plan을
+검토한 뒤 적용합니다.
 
 ```powershell
 terraform plan -destroy -out=customer-intelligence-destroy.tfplan
@@ -161,4 +156,13 @@ terraform apply .\customer-intelligence-destroy.tfplan
 terraform state list
 ```
 
-An empty final state confirms that the disposable validation stack was removed.
+`terraform state list`가 비어 있는지 확인하고 AWS 콘솔·CLI에서 다음도 확인합니다.
+
+- 실행·중지 상태의 EC2 인스턴스
+- 남아 있는 EBS volume과 snapshot
+- Elastic IP 또는 public IPv4
+- ECR repository와 image
+- Route 53 Hosted Zone처럼 이 Terraform 외부에서 만든 자원
+
+Terraform state 밖의 자원은 destroy가 제거하지 않습니다. 마지막으로 AWS Billing과
+Cost Explorer에서 비용 증가가 멈췄는지 확인합니다.
