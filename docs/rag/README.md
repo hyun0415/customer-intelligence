@@ -86,15 +86,102 @@ Child가 서로 다른 Parent에 속하면 RRF 후보는 최대 20개 Parent가 
 
 ### 4. BGE-M3 ColBERT 재정렬
 
-RRF로 통합된 Parent 후보 전체를 BGE-M3 `multi-vector` 점수로 다시 정렬합니다.
-BGE-M3의 Dense·Sparse 점수는 이 단계에서 사용하지 않고 ColBERT 점수만 사용합니다.
+RRF는 FTS와 Embedding 채널의 순위를 안정적으로 통합하지만, 후보 문서의 내용을
+질문과 직접 다시 비교하지는 않습니다. 따라서 RRF로 구성된 Parent 후보 전체를
+BGE-M3의 Multi-vector 점수로 다시 평가하여, 질문의 세부 조건을 더 잘 뒷받침하는
+정책 섹션을 상위로 올립니다.
 
-Late Interaction은 질문 토큰별로 Parent 토큰과의 유사도를 계산하고 가장 높은 값을
-선택하는 MaxSim을 집계합니다. 기본 제한은 질문 256 tokens, Parent 2,048 tokens,
-batch 2입니다.
+#### Dense 검색과의 차이
 
-Reranker가 timeout 또는 실행 오류를 반환하면 기본적으로 기존 RRF 순서로 복귀하고
-오류 종류를 retrieval metadata에 기록합니다.
+Dense Embedding은 질문과 문서 전체를 각각 하나의 벡터로 압축하여 비교합니다. 전체
+의미를 빠르게 비교하는 데 유리하지만, 정책 안의 특정 조건·횟수·예외처럼 세부적인
+표현은 하나의 벡터에 희석될 수 있습니다.
+
+BGE-M3 Multi-vector 방식은 질문과 Parent를 하나의 벡터로 압축하지 않고 토큰별
+벡터를 유지합니다.
+
+```text
+질문: “무료 재배송은 몇 회까지 가능한가?”
+질문 벡터: [무료] [재배송] [몇 회] [가능]
+
+Parent: “동일 사고에 대한 무료 재배송은 1회까지 자동 처리한다.”
+Parent 벡터: [동일] [사고] [무료] [재배송] [1회] [자동] [처리]
+```
+
+#### MaxSim 계산 절차
+
+Late Interaction은 질문과 Parent를 각각 먼저 인코딩한 뒤, 검색 시점에 토큰 벡터를
+서로 비교합니다. MaxSim 계산은 다음 순서로 진행됩니다.
+
+1. 질문을 토큰별 벡터로 변환합니다.
+2. Parent 정책도 토큰별 벡터로 변환합니다.
+3. 질문의 각 토큰을 Parent의 모든 토큰과 비교합니다.
+4. 질문 토큰마다 가장 높은 유사도 하나를 선택합니다.
+5. 선택된 최댓값을 평균하여 질문과 Parent의 최종 관련성 점수를 계산합니다.
+6. 모든 Parent 후보를 이 점수의 내림차순으로 다시 정렬합니다.
+
+아래 수치는 계산 원리를 보여주기 위한 예시입니다.
+
+| 질문 토큰 | Parent에서 가장 가까운 표현 | 예시 MaxSim |
+|---|---|---:|
+| `무료` | `무료` | 0.96 |
+| `재배송` | `재배송` | 0.98 |
+| `몇 회` | `1회` | 0.91 |
+| `가능` | `자동 처리` | 0.87 |
+
+표현이 정확히 같지 않아도 임베딩 공간에서 의미가 가까우면 높은 점수를 받을 수
+있습니다. BGE-M3의 Multi-vector 점수는 다음과 같이 정의됩니다.
+
+$$
+s_{mul}(q,p)=\frac{1}{N}\sum_{i=1}^{N}\max_{j}
+\left(E_q[i]\cdot E_p[j]^T\right)
+$$
+
+- $E_q[i]$: 질문의 i번째 토큰 벡터
+- $E_p[j]$: Parent의 j번째 토큰 벡터
+- $\max_j$: 질문 토큰과 가장 잘 대응되는 Parent 토큰 선택
+- 평균: 질문의 표현이 Parent 전체에서 얼마나 충족되는지 계산
+
+계산 정의는 [FlagEmbedding BGE-M3 공식 문서](https://github.com/FlagOpen/FlagEmbedding/blob/master/docs/source/bge/bge_m3.rst)의 Multi-vector 설명을 따릅니다.
+
+#### Parent를 재정렬하는 이유
+
+초기 검색은 짧고 구체적인 Child Chunk를 대상으로 수행합니다. Child는 질문과 직접
+일치하는 문장을 찾는 데 유리하지만, 답변에 필요한 예외 조건·적용 범위·승인 권한이
+잘려 있을 수 있습니다. Child를 발견한 뒤 해당 Child가 속한 Parent 정책 섹션을
+복원하고, MaxSim도 Parent를 대상으로 계산합니다.
+
+```text
+Child  → 질문과 직접 관련된 문장을 빠르게 발견하는 검색 단위
+Parent → 조건·예외·처리 기준을 함께 평가하는 재정렬·근거 단위
+```
+
+#### 현재 구현 설정과 실패 처리
+
+이 단계에서는 BGE-M3가 반환할 수 있는 Dense·Sparse·ColBERT 점수 중 **ColBERT
+점수만 사용**합니다. FTS와 Embedding 검색은 앞 단계에서 이미 RRF로 결합했으므로,
+재정렬은 토큰 수준의 관련성 비교에 집중합니다.
+
+| 설정 | 기본값 |
+|---|---:|
+| 질문 최대 길이 | 256 tokens |
+| Parent 최대 길이 | 2,048 tokens |
+| 처리 batch | 2 |
+| 재정렬 대상 | RRF로 통합된 Parent 후보 전체 |
+| 사용 점수 | BGE-M3 ColBERT MaxSim |
+
+Parent가 2,048 tokens를 초과하면 뒷부분이 잘릴 수 있고, 후보 수가 많을수록 토큰 간
+비교량과 GPU 메모리 사용량이 증가합니다. 따라서 MaxSim은 전체 정책을 탐색하는 1차
+검색기가 아니라, RRF가 좁힌 후보를 정밀하게 비교하는 2차 재정렬기로 사용합니다.
+
+Reranker가 timeout 또는 실행 오류를 반환하더라도 정책 검색 전체를 실패시키지
+않습니다. 기본 설정에서는 기존 RRF 순서로 복귀하고 오류 종류를 retrieval metadata에
+기록합니다.
+
+```text
+BGE-M3 성공       → MaxSim 점수로 Parent 후보 재정렬
+Timeout·실행 오류 → 기존 RRF 순서 유지 + 오류 metadata 기록
+```
 
 ### 5. 결정론적 정책 우선순위와 충돌
 
@@ -158,7 +245,7 @@ python -m src.rag.ingestion <internal-policy-manifest.csv>
 - BGE-M3 재정렬: `src/rag/rerankers.py`
 - 근거 판정: `src/rag/evidence.py`
 - DB 스키마: `db/migrations/004_policy_rag.sql`
-- 설계 결정: [ADR-001](../adr/001-hybrid-sql-rag-architecture.md)
+- 설계 결정: [ADR-001](../adr/001-review-analysis-and-policy-rag.md)
 - 평가 명령: [평가 안내](../../eval/README.md)
 
 빠른 회귀 테스트:

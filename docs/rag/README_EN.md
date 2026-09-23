@@ -89,16 +89,105 @@ deduplication.
 
 ### 4. BGE-M3 ColBERT reranking
 
-All fused Parent candidates are reranked with BGE-M3 multi-vector scores. Dense
-and sparse BGE-M3 outputs are disabled for this stage; only the ColBERT score is
-used.
+RRF reliably fuses ranks from the FTS and embedding channels, but it does not
+re-read candidate content against the question. The system therefore evaluates
+every fused Parent with BGE-M3 Multi-vector scoring and promotes the policy
+sections that best cover the question's detailed conditions.
 
-Late Interaction computes token-level similarities and aggregates the best
-Parent-token match for each query token through MaxSim. Defaults are 256 query
-tokens, 2,048 Parent tokens, and batch size 2.
+#### Difference from dense retrieval
 
-On timeout or runtime failure, the default policy restores the RRF order and
-records the error type in retrieval metadata.
+Dense retrieval compresses the question and an entire document into one vector
+each. This is efficient for broad semantic matching, but a single vector may
+dilute specific policy conditions, counts, or exceptions.
+
+BGE-M3 Multi-vector representation retains one vector per token instead of
+compressing the question and Parent into single vectors.
+
+```text
+Question: “How many free reshipments are allowed?”
+Query vectors: [free] [reshipment] [how many] [allowed]
+
+Parent: “One free reshipment is processed automatically for the same incident.”
+Parent vectors: [one] [free] [reshipment] [automatically] [same] [incident]
+```
+
+#### MaxSim procedure
+
+Late Interaction encodes the question and Parent independently, then compares
+their token vectors at retrieval time. MaxSim proceeds as follows:
+
+1. Encode the question as one vector per token.
+2. Encode the Parent policy section in the same way.
+3. Compare every query token with every Parent token.
+4. Keep the highest similarity for each query token.
+5. Average those maxima into the final query–Parent relevance score.
+6. Sort all Parent candidates by that score in descending order.
+
+The values below are illustrative rather than captured model outputs.
+
+| Query token | Best matching Parent expression | Example MaxSim |
+|---|---|---:|
+| `free` | `free` | 0.96 |
+| `reshipment` | `reshipment` | 0.98 |
+| `how many` | `one` | 0.91 |
+| `allowed` | `processed automatically` | 0.87 |
+
+Exact wording is not required when the expressions are close in the embedding
+space. BGE-M3 defines its Multi-vector score as:
+
+$$
+s_{mul}(q,p)=\frac{1}{N}\sum_{i=1}^{N}\max_{j}
+\left(E_q[i]\cdot E_p[j]^T\right)
+$$
+
+- $E_q[i]$: vector for query token i
+- $E_p[j]$: vector for Parent token j
+- $\max_j$: select the Parent token that best matches each query token
+- mean: measure how fully the Parent covers the query expressions
+
+The definition follows the Multi-vector section of the
+[official FlagEmbedding BGE-M3 documentation](https://github.com/FlagOpen/FlagEmbedding/blob/master/docs/source/bge/bge_m3.rst).
+
+#### Why rerank Parents
+
+Initial retrieval operates on short, focused Child chunks. A Child is effective
+for finding a directly matching sentence, but it may omit an exception, scope,
+deadline, or approval requirement from the surrounding policy. Once a Child is
+found, the system restores its Parent section and applies MaxSim to that fuller
+context.
+
+```text
+Child  → retrieval unit for finding a directly relevant sentence
+Parent → reranking and evidence unit containing conditions and exceptions
+```
+
+#### Current settings and failure behavior
+
+This stage uses only the **ColBERT score** among BGE-M3's Dense, Sparse, and
+ColBERT outputs. FTS and embedding signals have already been fused by RRF, so the
+reranker focuses on fine-grained token interaction.
+
+| Setting | Default |
+|---|---:|
+| Maximum query length | 256 tokens |
+| Maximum Parent length | 2,048 tokens |
+| Batch size | 2 |
+| Reranking input | All RRF-fused Parent candidates |
+| Score | BGE-M3 ColBERT MaxSim |
+
+Parents longer than 2,048 tokens may be truncated, and more candidates increase
+token comparisons and GPU memory use. MaxSim is therefore a second-stage
+reranker over the candidates narrowed by RRF, not a first-stage scanner over the
+entire policy corpus.
+
+A reranker timeout or runtime error does not fail policy retrieval. By default,
+the system restores the existing RRF order and records the error type in
+retrieval metadata.
+
+```text
+BGE-M3 succeeds       → rerank Parents by MaxSim score
+Timeout/runtime error → preserve RRF order and record error metadata
+```
 
 ### 5. Deterministic policy priority and conflict handling
 
@@ -165,7 +254,7 @@ Real policy content and secrets are not committed.
 - BGE-M3 reranking: `src/rag/rerankers.py`
 - Evidence assessment: `src/rag/evidence.py`
 - Database schema: `db/migrations/004_policy_rag.sql`
-- Design decision: [ADR-001](../adr/001-hybrid-sql-rag-architecture.md)
+- Design decision: [ADR-001](../adr/001-review-analysis-and-policy-rag_EN.md)
 - Evaluation commands: [Evaluation guide](../../eval/README_EN.md)
 
 Quick regression tests:

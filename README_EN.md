@@ -174,7 +174,7 @@ customer-intelligence/
 | [Terraform](infra/terraform/README_EN.md) | Cost-safe defaults, EC2 provisioning, SSM access, and teardown |
 | [Web architecture](docs/web_architecture.md) | Next.js, FastAPI, OIDC, sessions, and RBAC boundaries |
 | [Model runtime](docs/local_model_runtime.md) | OpenAI, Qwen, GPT-OSS, and Gemma roles and switching |
-| [Architecture decision](docs/adr/001-hybrid-sql-rag-architecture.md) | Why SQL and Hybrid RAG are separated |
+| [Review analysis and Policy RAG decision](docs/adr/001-review-analysis-and-policy-rag_EN.md) | Why tested SQL Tools and Policy Hybrid RAG are separated |
 
 ## Data and Publication Scope
 

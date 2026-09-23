@@ -165,7 +165,7 @@ customer-intelligence/
 | [Terraform](infra/terraform/README.md) | 비용 안전 기본값, EC2 생성, SSM 접속, 종료 절차 |
 | [Web 구조](docs/web_architecture.md) | Next.js, FastAPI, OIDC, 세션, RBAC 경계 |
 | [모델 런타임](docs/local_model_runtime.md) | OpenAI·Qwen·GPT-OSS·Gemma 역할과 전환 구조 |
-| [아키텍처 결정](docs/adr/001-hybrid-sql-rag-architecture.md) | SQL과 Hybrid RAG를 분리한 설계 근거 |
+| [리뷰 분석과 정책 RAG 분리 결정](docs/adr/001-review-analysis-and-policy-rag.md) | 검증된 SQL Tool과 정책 Hybrid RAG를 분리한 설계 근거 |
 
 ## 데이터와 공개 범위
 
