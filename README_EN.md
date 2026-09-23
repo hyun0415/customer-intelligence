@@ -138,6 +138,31 @@ Agent and full RAG evaluations require PostgreSQL data and OpenAI API settings.
 Detailed options, paid validation paths, and local-model commands are kept in
 the focused guides below.
 
+## Project Structure
+
+Only the paths needed to understand execution and core logic are shown. Local
+caches, generated artifacts, and minor helper files are intentionally omitted.
+
+```text
+customer-intelligence/
+├─ backend/                 # FastAPI API, authentication, conversations, and jobs
+├─ frontend/                # Next.js user interface
+├─ src/                     # Agent and core analysis logic
+│  ├─ analysis/             # Aspect extraction, source validation, and aggregation
+│  ├─ rag/                  # Policy retrieval, RRF, reranking, and evidence assessment
+│  ├─ prompts/              # Agent instructions and grounding rules
+│  ├─ llm/                  # OpenAI and vLLM role configuration and client interfaces
+│  ├─ auth/                 # Authentication, sessions, and access control
+│  └─ cache/                # Redis-backed review-analysis cache
+├─ db/                      # PostgreSQL schema and initialization SQL
+├─ data/                    # Sample policies and evaluation inputs
+├─ eval/                    # Automated Agent, RAG, and LLM-judge evaluation
+├─ tests/                   # Tool, analysis, authorization, and regression tests
+├─ deploy/                  # Docker Compose and AWS deployment scripts
+├─ infra/terraform/         # EC2, ECR, and network infrastructure definitions
+└─ docs/                    # Design guides, diagrams, and interface screenshots
+```
+
 ## Documentation
 
 | Guide | Scope |

@@ -129,6 +129,31 @@ python -m eval.rag_pipeline_comparison --stages baseline,rerank,full
 Agent 평가와 전체 RAG 평가는 PostgreSQL 데이터와 OpenAI API 설정이 필요합니다.
 세부 옵션, 비용이 발생하는 검증과 로컬 모델 실행은 분야별 문서에서 분리했습니다.
 
+## 프로젝트 구조
+
+실행과 핵심 로직을 이해하는 데 필요한 주요 경로만 표시했습니다. 개발 환경의 캐시,
+생성 결과와 단순 보조 파일은 생략했습니다.
+
+```text
+customer-intelligence/
+├─ backend/                 # FastAPI API, 인증과 대화·작업 관리
+├─ frontend/                # Next.js 사용자 화면
+├─ src/                     # Agent와 핵심 분석 로직
+│  ├─ analysis/             # Aspect 추출, 원문 검증과 패턴 집계
+│  ├─ rag/                  # 정책 검색, RRF, 재정렬과 근거 판정
+│  ├─ prompts/              # Agent 지침과 Grounding 규칙
+│  ├─ llm/                  # OpenAI·vLLM 모델 역할과 호출 인터페이스
+│  ├─ auth/                 # 인증·세션과 접근 제어
+│  └─ cache/                # Redis 기반 리뷰 분석 캐시
+├─ db/                      # PostgreSQL 스키마와 초기화 SQL
+├─ data/                    # 샘플 정책과 평가 입력 데이터
+├─ eval/                    # Agent·RAG·LLM Judge 자동 평가
+├─ tests/                   # Tool, 분석, 권한과 회귀 테스트
+├─ deploy/                  # Docker Compose와 AWS 배포 스크립트
+├─ infra/terraform/         # EC2·ECR·네트워크 인프라 정의
+└─ docs/                    # 상세 설계 문서, 다이어그램과 화면 이미지
+```
+
 ## 문서 안내
 
 | 문서 | 내용 |
