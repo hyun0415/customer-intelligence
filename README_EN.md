@@ -17,14 +17,14 @@ and exposure of unauthorized documents**.
 
 ## Core Design
 
-| Limitation to address | Design choice | Intended effect |
-|---|---|---|
-| LLM-generated SQL can change filters and aggregation criteria | Restrict the LLM to selecting tested SQL Tools | Produce quantitative results under consistent rules |
-| Rating statistics alone do not reveal concrete complaint causes | Extract aspects, sentiment, and evidence spans from low-rated reviews, then verify and aggregate them in Python | Connect recurring complaints and priorities to source reviews |
-| Keyword and semantic retrieval can miss different kinds of relevant policy | Fuse PostgreSQL FTS and embedding retrieval with RRF, then rerank with BGE-M3 MaxSim | Preserve both exact policy terminology and semantic similarity |
-| An LLM may answer even when retrieved evidence is insufficient | Classify evidence as `sufficient / insufficient / conflict` | Expose missing or conflicting evidence instead of inventing guidance |
-| Uniform policy access can expose documents outside a user's scope | Enforce collection, jurisdiction, department, and RBAC filters on the server | Retrieve only authorized and currently valid policy |
-| A high aggregate score alone does not explain operational reliability | Evaluate Tool accuracy, numerical grounding, evidence quality, and business usefulness | Compare model quality and cost under the same contract |
+| Path | Limitation to address | Design choice | Intended effect |
+|---|---|---|---|
+| **Review Analysis** | LLM-generated SQL can change filters and aggregation criteria | Restrict the LLM to selecting tested SQL Tools | Produce quantitative results under consistent rules |
+| **Review Analysis** | Rating statistics alone do not reveal concrete complaint causes | Extract aspects, sentiment, and evidence spans from low-rated reviews, then verify and aggregate them in Python | Connect recurring complaints and priorities to source reviews |
+| **Policy RAG** | Keyword and semantic retrieval can miss different kinds of relevant policy | Fuse PostgreSQL FTS and embedding retrieval with RRF, then rerank with BGE-M3 MaxSim | Preserve both exact policy terminology and semantic similarity |
+| **Policy RAG** | An LLM may answer even when retrieved evidence is insufficient | Classify evidence as `sufficient / insufficient / conflict` | Expose missing or conflicting evidence instead of inventing guidance |
+| **Policy RAG** | Uniform policy access can expose documents outside a user's scope | Enforce collection, jurisdiction, department, and RBAC filters on the server | Retrieve only authorized and currently valid policy |
+| **Shared Evaluation** | A high aggregate score alone does not explain operational reliability | Evaluate Tool accuracy, numerical grounding, evidence quality, and business usefulness | Compare model quality and cost under the same contract |
 
 ## Implementation Scope
 
