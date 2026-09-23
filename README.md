@@ -42,6 +42,9 @@ Aspect Extractor는 리뷰별 불만 유형과 근거 구절을 구조화하고,
 원문에 존재하는지 확인한 뒤 빈도와 표본 내 비율을 집계합니다. 최종 Agent는 검증된
 구조화 결과만 사용합니다.
 
+Extractor의 입출력 스키마, Python 원문 검증, Redis 캐시와 리뷰별 호출의 장단점은
+[고객 리뷰 분석 문서](docs/review-analysis/README.md)에 정리했습니다.
+
 ### 정책 Hybrid RAG
 
 ![정책 Hybrid RAG 검색과 근거 판정](docs/assets/diagrams/policy-hybrid-rag-flow.png)
@@ -130,6 +133,7 @@ Agent 평가와 전체 RAG 평가는 PostgreSQL 데이터와 OpenAI API 설정�
 
 | 문서 | 내용 |
 |---|---|
+| [고객 리뷰 분석](docs/review-analysis/README.md) | SQL 표본 선정, Aspect Extraction, 원문 검증·집계, Redis 캐시와 한계 |
 | [정책 RAG](docs/rag/README.md) | ingestion, Child/Parent 검색, RRF, BGE-M3, 정책 우선순위, 근거 판정 |
 | [평가](eval/README.md) | Agent·Tool·Judge·RAG·로컬 모델 평가 명령과 결과 파일 |
 | [실행·배포](deploy/README.md) | 로컬 Compose, ECR 이미지 게시, EC2 배포 순서 |

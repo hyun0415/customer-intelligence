@@ -46,6 +46,10 @@ evidence spans. Python verifies that each span exists in the original review and
 aggregates counts and sample-level ratios. The final Agent consumes only the
 validated structured result.
 
+The [customer review analysis guide](docs/review-analysis/README_EN.md) documents
+the Extractor schema, Python source validation, Redis caching, and the trade-offs
+of per-review model calls.
+
 ### Policy Hybrid RAG
 
 ![Policy Hybrid RAG retrieval and evidence assessment](docs/assets/diagrams/policy-hybrid-rag-flow.png)
@@ -138,6 +142,7 @@ the focused guides below.
 
 | Guide | Scope |
 |---|---|
+| [Customer review analysis](docs/review-analysis/README_EN.md) | SQL sampling, Aspect Extraction, source validation and aggregation, Redis caching, and limitations |
 | [Policy RAG](docs/rag/README_EN.md) | Ingestion, Child/Parent retrieval, RRF, BGE-M3, priority, and evidence gating |
 | [Evaluation](eval/README_EN.md) | Agent, Tool, Judge, RAG, and local-model evaluation commands and outputs |
 | [Run and deploy](deploy/README_EN.md) | Local Compose, ECR image publishing, and EC2 deployment |
