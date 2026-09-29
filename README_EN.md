@@ -111,7 +111,23 @@ RAG evaluation. Passing the fixed set does not guarantee performance for every
 possible query, so failures and regression rules are recorded together. See the
 [evaluation guide](eval/README_EN.md) for commands and outputs.
 
-## Quick Start
+## Execution Profiles
+
+The project keeps the same Tool, schema, and evaluation contracts while
+separating models and infrastructure by validation purpose.
+
+| Profile | Purpose | Configuration | Validation status |
+|---|---|---|---|
+| Reproducible Docker environment | Code review and functional reproduction | Next.js, FastAPI, PostgreSQL, Redis, OpenAI API | Core paths and regression tests verified |
+| AWS GPU validation environment | Open-model and reranker compatibility | EC2 L40S, vLLM, Qwen3 and GPT-OSS, BGE-M3 | Representative product-analysis and policy-RAG smoke tests completed |
+| Always-on production environment | Public service operation | Requires separate cost, security, and observability policies | Outside the portfolio scope |
+
+The GPU services are not kept publicly available. Terraform creates the EC2
+validation environment when needed, representative paths are checked, and
+billable resources are then removed. The `localhost` addresses below are
+therefore reproducible entry points, not the limit of the deployment design.
+
+## Reproducible Docker Compose Environment
 
 From the repository root, copy `.env.example` and keep real secrets only in the
 ignored `.env` file.
