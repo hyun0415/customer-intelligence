@@ -1,9 +1,9 @@
 # 정책 Hybrid RAG
 
-[English](README_EN.md) · [프로젝트 홈](../../README.md)
+[English](README_EN.md) / [프로젝트 홈](../../README.md)
 
-사내 환불·재배송·보상·프로모션·제품 운영·CS SOP를 검색하는 경로입니다.
-상품·리뷰의 개수와 비율은 SQL Tool이 담당하고, 비정형 정책 문서만 이 RAG 경로가
+사내 환불, 재배송, 보상, 프로모션, 제품 운영, CS SOP를 검색하는 경로입니다.
+상품과 리뷰의 개수와 비율은 SQL Tool이 담당하고, 비정형 정책 문서만 이 RAG 경로가
 담당합니다.
 
 ## 검색 계약
@@ -18,12 +18,12 @@
 
 | 단위 | 기본 크기 | 역할 |
 |---|---:|---|
-| Parent | 800~1,200 tokens | 조건·예외·승인 기준을 포함하는 완결된 정책 섹션 |
+| Parent | 800~1,200 tokens | 조건, 예외, 승인 기준을 포함하는 완결된 정책 섹션 |
 | Child | 300~450 tokens | FTS와 Embedding에서 관련 위치를 정밀하게 찾는 검색 단위 |
 | Overlap | 50 tokens | Child 경계에서 문맥이 끊기는 현상 완화 |
 
 Child에는 FTS 인덱스와 Dense Embedding을 저장합니다. Parent는 검색된 Child의 상위
-섹션으로 불러오며, BGE-M3 재정렬·LLM 근거 판정·최종 인용에 사용합니다.
+섹션으로 불러오며, BGE-M3 재정렬, LLM 근거 판정, 최종 인용에 사용합니다.
 
 Parent를 재정렬하는 이유는 검색 문장 주변의 기한, 예외와 승인 조건까지 평가하기
 위해서입니다. Child만 최종 근거로 사용하면 관련 문장은 찾더라도 같은 섹션의 제한
@@ -94,7 +94,7 @@ BGE-M3의 Multi-vector 점수로 다시 평가하여, 질문의 세부 조건을
 #### Dense 검색과의 차이
 
 Dense Embedding은 질문과 문서 전체를 각각 하나의 벡터로 압축하여 비교합니다. 전체
-의미를 빠르게 비교하는 데 유리하지만, 정책 안의 특정 조건·횟수·예외처럼 세부적인
+의미를 빠르게 비교하는 데 유리하지만, 정책 안의 특정 조건, 횟수, 예외처럼 세부적인
 표현은 하나의 벡터에 희석될 수 있습니다.
 
 BGE-M3 Multi-vector 방식은 질문과 Parent를 하나의 벡터로 압축하지 않고 토큰별
@@ -147,18 +147,18 @@ $$
 #### Parent를 재정렬하는 이유
 
 초기 검색은 짧고 구체적인 Child Chunk를 대상으로 수행합니다. Child는 질문과 직접
-일치하는 문장을 찾는 데 유리하지만, 답변에 필요한 예외 조건·적용 범위·승인 권한이
+일치하는 문장을 찾는 데 유리하지만, 답변에 필요한 예외 조건, 적용 범위, 승인 권한이
 잘려 있을 수 있습니다. Child를 발견한 뒤 해당 Child가 속한 Parent 정책 섹션을
 복원하고, MaxSim도 Parent를 대상으로 계산합니다.
 
 ```text
 Child  → 질문과 직접 관련된 문장을 빠르게 발견하는 검색 단위
-Parent → 조건·예외·처리 기준을 함께 평가하는 재정렬·근거 단위
+Parent → 조건, 예외, 처리 기준을 함께 평가하는 재정렬과 근거 단위
 ```
 
 #### 현재 구현 설정과 실패 처리
 
-이 단계에서는 BGE-M3가 반환할 수 있는 Dense·Sparse·ColBERT 점수 중 **ColBERT
+이 단계에서는 BGE-M3가 반환할 수 있는 Dense, Sparse, ColBERT 점수 중 **ColBERT
 점수만 사용**합니다. FTS와 Embedding 검색은 앞 단계에서 이미 RRF로 결합했으므로,
 재정렬은 토큰 수준의 관련성 비교에 집중합니다.
 
@@ -180,7 +180,7 @@ Reranker가 timeout 또는 실행 오류를 반환하더라도 정책 검색 전
 
 ```text
 BGE-M3 성공       → MaxSim 점수로 Parent 후보 재정렬
-Timeout·실행 오류 → 기존 RRF 순서 유지 + 오류 metadata 기록
+Timeout 또는 실행 오류 → 기존 RRF 순서 유지 + 오류 metadata 기록
 ```
 
 ### 5. 결정론적 정책 우선순위와 충돌
@@ -205,7 +205,7 @@ Timeout·실행 오류 → 기존 RRF 순서 유지 + 오류 metadata 기록
 1~20 범위에서 변경할 수 있습니다. 구조화 LLM은 다음 상태만 판정합니다.
 
 - `sufficient`: 질문의 핵심 조건을 정책이 직접 뒷받침함
-- `insufficient`: 주제는 유사하지만 금액·기한·자격·예외 등 핵심 조건이 부족함
+- `insufficient`: 주제는 유사하지만 금액, 기한, 자격, 예외 등 핵심 조건이 부족함
 - `conflict`: 제공된 근거들이 양립할 수 없는 결론을 제시함
 
 판정기가 실패하면 답변을 강행하지 않고 `no_evidence`로 닫습니다. `sufficient`로
@@ -240,7 +240,7 @@ python -m src.rag.ingestion <internal-policy-manifest.csv>
 
 ## 코드와 검증
 
-- 검색·통합·우선순위: `src/rag/retriever.py`
+- 검색, 통합, 우선순위: `src/rag/retriever.py`
 - Embedding provider: `src/rag/embeddings.py`
 - BGE-M3 재정렬: `src/rag/rerankers.py`
 - 근거 판정: `src/rag/evidence.py`

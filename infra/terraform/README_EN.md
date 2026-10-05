@@ -1,6 +1,6 @@
 # Terraform Validation Environment
 
-[한국어](README.md) · [Project home](../../README_EN.md) · [Deployment guide](../../deploy/README_EN.md)
+[한국어](README.md) / [Project home](../../README_EN.md) / [Deployment guide](../../deploy/README_EN.md)
 
 This root creates disposable EC2 infrastructure for short Customer Intelligence
 validation runs. It deliberately avoids EKS, NAT Gateway, RDS, ElastiCache,

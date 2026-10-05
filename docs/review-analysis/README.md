@@ -1,9 +1,9 @@
 # 고객 리뷰 분석과 Aspect Extraction
 
-[English](README_EN.md) · [메인 문서](../../README.md)
+[English](README_EN.md) / [메인 문서](../../README.md)
 
-이 문서는 제품 분석 질문이 SQL 조회, 리뷰별 Aspect Extraction, Python 검증·집계를
-거쳐 최종 Agent 답변으로 변환되는 과정을 설명합니다. 설계의 핵심은 **데이터 선택과
+이 문서는 샴푸 상품 분석 질문이 SQL 조회, 리뷰별 Aspect Extraction, Python 검증과
+집계를 거쳐 최종 Agent 답변으로 변환되는 과정을 설명합니다. 설계의 핵심은 **데이터 선택과
 수치는 결정론적 코드가 담당하고, 리뷰의 의미 해석만 LLM에 맡기는 것**입니다.
 
 ## 전체 흐름
@@ -11,10 +11,10 @@
 ```text
 사용자 질문
   → Agent가 검증된 SQL Tool 선택
-  → PostgreSQL에서 리뷰 표본·통계 조회
+  → PostgreSQL에서 리뷰 표본과 통계 조회
   → 리뷰별 Aspect Extractor 호출
   → Python 원문 근거 검증
-  → Python 빈도·비율 집계
+  → Python 빈도와 비율 집계
   → ReviewPatternResult
   → Final Agent가 반복 불만과 개선 우선순위 설명
 ```
@@ -89,11 +89,11 @@ Aspect Extractor는 표본을 한꺼번에 요약하지 않고 리뷰를 한 건
 | `odor` | 불쾌한 냄새 |
 | `packaging` | 포장 문제 |
 | `ineffective` | 효과 부족 |
-| `authenticity` | 정품·품질 의심 |
+| `authenticity` | 정품과 품질 의심 |
 | `skin_reaction` | 피부 이상 반응 |
 
 이 taxonomy는 Python이 리뷰에서 자동으로 학습하거나 생성한 분류 체계가 아닙니다.
-프로젝트에서 확인하려는 제품 품질·사용 경험을 기준으로 개발자가 Key, 표시 이름과
+프로젝트에서 확인하려는 제품 품질과 사용 경험을 기준으로 개발자가 Key, 표시 이름과
 정의를 미리 작성한 업무 규칙입니다. Python은 이 목록을 Extractor Prompt에 넣고,
 LLM은 리뷰의 의미와 각 정의를 비교해 해당 `topic`을 선택합니다.
 
@@ -121,7 +121,7 @@ REVIEW_TOPICS = {
 |---|---|
 | 개발자 | 분석할 Aspect와 각 항목의 정의를 taxonomy로 설계 |
 | LLM | 리뷰 문장을 해석하여 허용된 Aspect 중 해당 항목을 선택 |
-| Pydantic·Python | 허용된 Key인지 검사하고 잘못된 값은 결과에서 제외 |
+| Pydantic과 Python | 허용된 Key인지 검사하고 잘못된 값은 결과에서 제외 |
 
 ```text
 리뷰: “The bottle leaked all over the box.”
@@ -154,7 +154,7 @@ Aspect 분석 경로만으로는 taxonomy 밖의 내용을 최종 답변에 생�
 
 ## 3. Python 원문 검증과 집계
 
-Extractor의 JSON을 그대로 집계하지 않습니다. 먼저 `evidence`와 리뷰의 제목·본문을
+Extractor의 JSON을 그대로 집계하지 않습니다. 먼저 `evidence`와 리뷰의 제목과 본문을
 소문자로 변환하고 연속 공백을 정리한 뒤, 근거 구절이 원문에 **문자열로 실제 포함되어
 있는지** 확인합니다. 의미 유사도 검색이 아니라 정확한 포함 검사이므로, LLM이 근거를
 요약하거나 바꿔 쓰면 해당 Topic은 제거됩니다.
@@ -198,8 +198,8 @@ Redis에 연결할 수 없거나 캐시 JSON이 현재 Pydantic 스키마와 맞
 |---|---|
 | 장점 | 리뷰 한 건과 JSON 한 건이 대응되어 근거 추적과 오류 격리가 명확함 |
 | 장점 | 원문에 없는 인용, 허용되지 않은 Aspect와 중복 결과를 Python으로 제거함 |
-| 장점 | 표본 선정과 빈도·비율 계산이 코드에 고정되어 재현 가능함 |
-| 장점 | 리뷰·모델별 캐시로 동일 분석의 시간과 API 비용을 줄임 |
+| 장점 | 표본 선정과 빈도 및 비율 계산이 코드에 고정되어 재현 가능함 |
+| 장점 | 리뷰와 모델 조합별 캐시로 동일 분석의 시간과 API 비용을 줄임 |
 | 한계 | 캐시가 없는 리뷰마다 LLM을 순차 호출하므로 최초 20건 분석의 지연과 비용이 큼 |
 | 한계 | 고정 taxonomy 밖의 새로운 불만 유형은 구조화 결과에서 제외될 수 있음 |
 | 한계 | evidence가 원문을 정확히 인용해야 하므로 의미는 같아도 표현을 바꾸면 제거됨 |
@@ -214,10 +214,10 @@ Redis에 연결할 수 없거나 캐시 JSON이 현재 Pydantic 스키마와 맞
 | 역할 | 파일 |
 |---|---|
 | Agent Tool과 SQL 표본 선정 | [`src/tools.py`](../../src/tools.py) |
-| Extractor Prompt·호출·원문 검증 | [`src/analysis/review_extractor.py`](../../src/analysis/review_extractor.py) |
+| Extractor Prompt, 호출, 원문 검증 | [`src/analysis/review_extractor.py`](../../src/analysis/review_extractor.py) |
 | Pydantic 입출력 스키마 | [`src/analysis/schemas.py`](../../src/analysis/schemas.py) |
 | Aspect taxonomy | [`src/analysis/taxonomy.py`](../../src/analysis/taxonomy.py) |
-| 빈도·비율 집계 | [`src/analysis/review_statistics.py`](../../src/analysis/review_statistics.py) |
+| 빈도와 비율 집계 | [`src/analysis/review_statistics.py`](../../src/analysis/review_statistics.py) |
 | Redis 캐시 | [`src/cache/review_cache.py`](../../src/cache/review_cache.py) |
 
 ```powershell

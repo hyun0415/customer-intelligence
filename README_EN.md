@@ -28,11 +28,11 @@ and exposure of unauthorized documents**.
 
 ## Implementation Scope
 
-The analysis dataset contains 547 Beauty and Personal Care products and 105,060
-reviews from Amazon Reviews 2023. Review analysis, policy retrieval, evidence
-assessment, and access control are connected to Google OIDC, Redis sessions, and
-conversation ownership, making the project an **MVP for validating an operational
-workflow rather than a standalone RAG demonstration**.
+The analysis dataset contains 547 shampoo products in the Beauty and Personal Care
+category and their 105,060 reviews from Amazon Reviews 2023. Review analysis,
+policy retrieval, evidence assessment, and access control are connected to
+Google OIDC, Redis sessions, and conversation ownership, making the project an
+**MVP for validating an operational workflow rather than a standalone RAG demonstration**.
 
 ## System Flows
 

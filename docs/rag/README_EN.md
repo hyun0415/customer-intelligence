@@ -1,6 +1,6 @@
 # Policy Hybrid RAG
 
-[한국어](README.md) · [Project home](../../README_EN.md)
+[한국어](README.md) / [Project home](../../README_EN.md)
 
 This path retrieves internal refund, reshipment, compensation, promotion,
 product-operation, and CS SOP documents. Product and review counts remain the

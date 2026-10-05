@@ -1,6 +1,6 @@
 # Terraform 검증 환경
 
-[English](README_EN.md) · [프로젝트 홈](../../README.md) · [배포 안내](../../deploy/README.md)
+[English](README_EN.md) / [프로젝트 홈](../../README.md) / [배포 안내](../../deploy/README.md)
 
 Customer Intelligence 모노레포의 짧은 AWS 검증을 위한 일회성 EC2 환경입니다.
 EKS, NAT Gateway, RDS, ElastiCache, public Load Balancer와 DNS를 만들지 않습니다.
@@ -15,10 +15,10 @@ EKS, NAT Gateway, RDS, ElastiCache, public Load Balancer와 DNS를 만들지 않
 ```
 
 두 호스트는 public subnet을 사용하지만 Security Group에 인터넷 inbound 규칙이
-없습니다. public IP는 NAT Gateway 없이 이미지·모델을 내려받기 위한 outbound
+없습니다. public IP는 NAT Gateway 없이 이미지와 모델을 내려받기 위한 outbound
 경로이며, 관리 접속은 SSH 대신 SSM을 사용합니다.
 
-## 비용·보안 기본값
+## 비용과 보안 기본값
 
 - `enable_stack=false`: AWS 리소스를 생성하지 않는 master switch
 - CPU와 GPU 생성 여부를 독립적으로 선택
@@ -55,7 +55,7 @@ terraform validate
 terraform plan -out=customer-intelligence.tfplan
 ```
 
-저장된 plan에서 계정, 서울 리전, instance type, EBS 크기와 생성·삭제 대상 개수를
+저장된 plan에서 계정, 서울 리전, instance type, EBS 크기와 생성 및 삭제 대상 개수를
 확인합니다. 검증 단계에서는 `-auto-approve`를 사용하지 않습니다.
 
 ## 2. 생성
@@ -77,7 +77,7 @@ terraform apply .\customer-intelligence.tfplan
 terraform output
 ```
 
-`g6e.2xlarge`는 서울 리전의 G·VT On-Demand vCPU quota와 실제 가용 용량이 모두
+`g6e.2xlarge`는 서울 리전의 G와 VT On-Demand vCPU quota와 실제 가용 용량이 모두
 필요합니다. quota가 충분해도 선택 AZ에 장비가 없으면 용량 오류가 발생할 수 있습니다.
 
 ## 3. SSM 접속과 Port Forwarding
@@ -135,13 +135,13 @@ peak GPU memory를 결과에 기록합니다.
 ## 5. 이미지 배포와 검증
 
 Terraform은 Backend, Frontend와 Reranker용 private ECR을 생성합니다. 실제 build와
-배포 명령은 [실행·배포 안내](../../deploy/README.md)에만 유지합니다.
+배포 명령은 [실행과 배포 안내](../../deploy/README.md)에만 유지합니다.
 
 검증 완료 기준:
 
-- CPU·GPU 서비스 healthcheck 통과
+- CPU와 GPU 서비스 healthcheck 통과
 - 상품 분석 1건에서 SQL 수치와 Aspect 원문 근거 확인
-- 정책 RAG 1건에서 권한·재정렬·근거 판정 확인
+- 정책 RAG 1건에서 권한, 재정렬, 근거 판정 확인
 - 결과 파일을 로컬로 보존한 뒤 비용 자원 종료
 
 ## 종료와 삭제
@@ -156,9 +156,9 @@ terraform apply .\customer-intelligence-destroy.tfplan
 terraform state list
 ```
 
-`terraform state list`가 비어 있는지 확인하고 AWS 콘솔·CLI에서 다음도 확인합니다.
+`terraform state list`가 비어 있는지 확인하고 AWS 콘솔과 CLI에서 다음도 확인합니다.
 
-- 실행·중지 상태의 EC2 인스턴스
+- 실행 또는 중지 상태의 EC2 인스턴스
 - 남아 있는 EBS volume과 snapshot
 - Elastic IP 또는 public IPv4
 - ECR repository와 image

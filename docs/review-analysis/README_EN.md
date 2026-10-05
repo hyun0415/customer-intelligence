@@ -1,11 +1,11 @@
 # Customer Review Analysis and Aspect Extraction
 
-[한국어](README.md) · [Main documentation](../../README_EN.md)
+[한국어](README.md) / [Main documentation](../../README_EN.md)
 
-This guide explains how a product-analysis question moves through SQL retrieval,
-per-review Aspect Extraction, Python validation and aggregation, and finally back
-to the Agent. The governing principle is: **deterministic code selects data and
-computes numbers; the LLM is used only for semantic interpretation**.
+This guide explains how a question about shampoo products moves through SQL
+retrieval, per-review Aspect Extraction, Python validation and aggregation, and
+finally back to the Agent. The governing principle is: **deterministic code
+selects data and computes numbers; the LLM is used only for semantic interpretation**.
 
 ## End-to-End Flow
 

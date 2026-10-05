@@ -1,6 +1,6 @@
 # Evaluation Guide
 
-[한국어](README.md) · [Project home](../README_EN.md)
+[한국어](README.md) / [Project home](../README_EN.md)
 
 This directory evaluates Agent Tool selection, numeric grounding, review
 aspects, policy RAG, and model quality at separate layers. The fixed suite is a

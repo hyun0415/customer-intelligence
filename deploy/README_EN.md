@@ -1,6 +1,6 @@
 # Run and Deployment Guide
 
-[한국어](README.md) · [Project home](../README_EN.md)
+[한국어](README.md) / [Project home](../README_EN.md)
 
 This directory contains local Compose files and the workflow that deploys tested
 monorepo images to AWS EC2. EC2 does not clone the repository or rebuild heavy
