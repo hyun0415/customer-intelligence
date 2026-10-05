@@ -17,7 +17,7 @@ import { Dashboard } from "../components/Dashboard";
 import { HomeDashboard } from "../components/HomeDashboard";
 import { TrashIcon } from "../components/Icons";
 
-const statusLabel: Record<string, string> = {
+const statusLabel: Record<Exclude<NonNullable<Message["response_status"]>, "answer">, string> = {
   no_evidence: "근거 부족",
   conflict: "정책 충돌",
   escalation: "담당자 확인 필요",
@@ -32,22 +32,28 @@ const loadingStages = [
 
 function conversationTitle(content: string) {
   const normalized = content.replace(/\s+/g, " ").trim();
+
   return normalized.length > 32 ? `${normalized.slice(0, 31).trim()}…` : normalized;
 }
 
 async function waitForAgentJob(jobId: string) {
   const deadline = Date.now() + 150_000;
+
   while (Date.now() < deadline) {
     const job = await api<AgentJob>(`/api/conversation-jobs/${jobId}`);
+
     if (job.status === "succeeded") return job;
+
     if (job.status === "failed") {
       throw new ApiError(
         job.error || "답변을 생성하지 못했습니다.",
         job.http_status || 500,
       );
     }
+
     await new Promise((resolve) => window.setTimeout(resolve, 1500));
   }
+
   throw new ApiError(
     "답변 생성이 계속 진행 중입니다. 잠시 후 대화를 다시 열어 확인해 주세요.",
     504,
@@ -69,21 +75,24 @@ export default function Home() {
   const [adminUsers, setAdminUsers] = useState<User[]>([]);
   const [auditEvents, setAuditEvents] = useState<SecurityAuditEvent[]>([]);
 
-  const errorMessage = useCallback((reason: unknown, fallback: string) => {
-    if (reason instanceof ApiError && reason.requestId) {
-      return `${reason.message} (요청 ID: ${reason.requestId})`;
+  const errorMessage = useCallback((cause: unknown, fallback: string) => {
+    if (cause instanceof ApiError && cause.requestId) {
+      return `${cause.message} (요청 ID: ${cause.requestId})`;
     }
-    return reason instanceof Error ? reason.message : fallback;
+
+    return cause instanceof Error ? cause.message : fallback;
   }, []);
 
   async function loadConversations() {
     const rows = await api<Conversation[]>("/api/conversations");
     setConversations(rows);
+
     if (rows.length && !active) await openConversation(rows[0].conversation_id);
   }
 
   async function openConversation(id: string) {
     setError("");
+
     try {
       setActive(await api<Conversation>(`/api/conversations/${id}`));
     } catch (reason) {
@@ -94,6 +103,7 @@ export default function Home() {
   async function openOperations(nextView: "escalations" | "admin") {
     setError("");
     setLoading(true);
+
     try {
       if (nextView === "escalations") {
         setEscalations(await api<Escalation[]>("/api/escalations"));
@@ -102,9 +112,11 @@ export default function Home() {
           api<User[]>("/api/admin/users"),
           api<SecurityAuditEvent[]>("/api/admin/security-audit-events?limit=50"),
         ]);
+
         setAdminUsers(users);
         setAuditEvents(events);
       }
+
       setView(nextView);
     } catch (reason) {
       setError(errorMessage(reason, "운영 정보를 불러오지 못했습니다."));
@@ -118,6 +130,7 @@ export default function Home() {
     status: Escalation["status"],
   ) {
     setError("");
+
     try {
       await api(`/api/escalations/${escalationId}`, {
         method: "PUT",
@@ -134,11 +147,13 @@ export default function Home() {
     api<User>("/api/auth/me")
       .then((value) => {
         setUser(value);
+
         return api<Conversation[]>("/api/conversations");
       })
       .then(setConversations)
       .catch((reason) => {
         setUser(null);
+
         if (!(reason instanceof ApiError && reason.status === 401)) {
           setError(errorMessage(reason, "서비스 상태를 확인할 수 없습니다."));
         }
@@ -148,22 +163,27 @@ export default function Home() {
   useEffect(() => {
     if (!loading) {
       setLoadingStage(0);
+
       return;
     }
+
     const timer = window.setInterval(() => {
       setLoadingStage((current) => Math.min(current + 1, loadingStages.length - 1));
     }, 2500);
+
     return () => window.clearInterval(timer);
   }, [loading]);
 
   async function devLogin(event: FormEvent) {
     event.preventDefault();
     setError("");
+
     try {
       const loggedIn = await api<User>("/api/auth/dev-login", {
         method: "POST",
         body: JSON.stringify({ email: devEmail, display_name: "개발 사용자" }),
       });
+
       setUser(loggedIn);
       await loadConversations();
     } catch (reason) {
@@ -173,11 +193,13 @@ export default function Home() {
 
   async function createPolicyConversation(initialQuestion = "") {
     setError("");
+
     try {
       const created = await api<Conversation>("/api/conversations", {
         method: "POST",
         body: JSON.stringify({ title: "새 대화", context_mode: "general" }),
       });
+
       setConversations((items) => [created, ...items]);
       setActive({ ...created, messages: [] });
       setView("chat");
@@ -198,6 +220,7 @@ export default function Home() {
 
   async function startProductConversation(product: DashboardProduct) {
     setError("");
+
     try {
       const created = await api<Conversation>("/api/conversations", {
         method: "POST",
@@ -207,6 +230,7 @@ export default function Home() {
           product_parent_asin: product.parent_asin,
         }),
       });
+
       setConversations((items) => [created, ...items]);
       setActive({ ...created, messages: [] });
       setView("chat");
@@ -218,6 +242,7 @@ export default function Home() {
 
   async function logout() {
     setError("");
+
     try {
       await api<void>("/api/auth/logout", { method: "POST" });
       setUser(null);
@@ -234,15 +259,19 @@ export default function Home() {
     const conversation = conversations.find(
       (item) => item.conversation_id === conversationId,
     );
+
     if (!conversation) return;
+
     if (!window.confirm(`“${conversation.title}” 대화를 목록에서 삭제할까요?\n감사·근거 이력은 보존됩니다.`)) return;
 
     setError("");
+
     try {
       await api<void>(`/api/conversations/${conversationId}`, { method: "DELETE" });
       setConversations((items) => items.filter(
         (item) => item.conversation_id !== conversationId,
       ));
+
       if (active?.conversation_id === conversationId) {
         setActive(null);
         setQuestion("");
@@ -255,10 +284,12 @@ export default function Home() {
 
   async function submit(event: FormEvent) {
     event.preventDefault();
+
     if (!question.trim() || !active || loading) return;
     const content = question.trim();
     const conversationId = active.conversation_id;
     const pendingId = `pending-${Date.now()}`;
+
     const pendingMessage: Message = {
       message_id: pendingId,
       role: "user",
@@ -267,6 +298,7 @@ export default function Home() {
       sources: [],
       delivery_state: "sending",
     };
+
     const nextTitle = active.title === "새 대화" ? conversationTitle(content) : active.title;
     setQuestion("");
     setActive((current) => current ? {
@@ -279,11 +311,13 @@ export default function Home() {
     ));
     setLoading(true);
     setError("");
+
     try {
       const job = await api<AgentJob>(`/api/conversations/${conversationId}/messages`, {
         method: "POST",
         body: JSON.stringify({ content }),
       });
+
       await waitForAgentJob(job.job_id);
       await openConversation(conversationId);
       await loadConversations();
@@ -295,9 +329,11 @@ export default function Home() {
       } else {
         try {
           const current = await api<Conversation>(`/api/conversations/${conversationId}`);
+
           const wasSaved = (current.messages ?? []).some(
             (message) => message.role === "user" && message.content === content,
           );
+
           if (wasSaved) {
             setActive(current);
           } else {
@@ -323,6 +359,7 @@ export default function Home() {
           } : value);
         }
       }
+
       setError(errorMessage(reason, "답변 생성 실패"));
     } finally {
       setLoading(false);

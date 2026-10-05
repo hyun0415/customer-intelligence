@@ -18,12 +18,12 @@ const policyQuestions = [
 ];
 
 function scopeLabel(value: string) {
-  const sentinels: Record<string, string> = {
-    ALL_COLLECTIONS: "전체 Collection",
-    ALL_JURISDICTIONS: "전체 관할",
-    ALL_DEPARTMENTS: "전체 부서",
-  };
-  return sentinels[value] ?? value.replaceAll("_", " ");
+  switch (value) {
+    case "ALL_COLLECTIONS": return "전체 Collection";
+    case "ALL_JURISDICTIONS": return "전체 관할";
+    case "ALL_DEPARTMENTS": return "전체 부서";
+    default: return value.replaceAll("_", " ");
+  }
 }
 
 export function HomeDashboard({

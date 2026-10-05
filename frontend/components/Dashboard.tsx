@@ -12,7 +12,7 @@ import { CheckIcon, SearchIcon } from "./Icons";
 
 type Props = {
   onError: (message: string) => void;
-  errorMessage: (reason: unknown, fallback: string) => string;
+  errorMessage: (cause: unknown, fallback: string) => string;
   onStartProductConversation: (product: DashboardProduct) => Promise<void>;
 };
 
@@ -39,10 +39,12 @@ export function Dashboard({ onError, errorMessage, onStartProductConversation }:
     setLoading(true);
     setPatterns(null);
     onError("");
+
     try {
       const row = await api<DashboardProductDetail>(
         `/api/dashboard/products/${encodeURIComponent(parentAsin)}`,
       );
+
       setSelected(parentAsin);
       setDetail(row);
       window.sessionStorage.setItem("ci:dashboard-product", parentAsin);
@@ -59,20 +61,25 @@ export function Dashboard({ onError, errorMessage, onStartProductConversation }:
   async function loadProducts(search = "") {
     setLoading(true);
     onError("");
+
     try {
       const rows = await api<DashboardProduct[]>(
         `/api/dashboard/products?limit=12&query=${encodeURIComponent(search)}`,
       );
+
       setProducts(rows);
+
       if (rows.length) {
         const savedProduct = search
           ? null
           : window.sessionStorage.getItem("ci:dashboard-product");
+
         const targetProduct = rows.some(
           (row) => row.parent_asin === savedProduct,
         )
           ? savedProduct!
           : rows[0].parent_asin;
+
         await loadDetail(targetProduct);
       } else {
         setSelected("");
@@ -93,24 +100,31 @@ export function Dashboard({ onError, errorMessage, onStartProductConversation }:
     if (!patternJobId) return;
     let stopped = false;
     let timer: number | undefined;
+
     const poll = async () => {
       try {
         const job = await api<AspectJob>(`/api/dashboard/pattern-jobs/${patternJobId}`);
+
         if (stopped) return;
+
         if (job.status === "succeeded" && job.result) {
           setPatterns(job.result);
           setPatternLoading(false);
           setPatternJobId("");
           window.sessionStorage.removeItem(`ci:aspect-job:${job.parent_asin}`);
+
           return;
         }
+
         if (job.status === "failed") {
           setPatternLoading(false);
           setPatternJobId("");
           window.sessionStorage.removeItem(`ci:aspect-job:${job.parent_asin}`);
           onError(job.error || "Aspect 분석을 완료하지 못했습니다.");
+
           return;
         }
+
         timer = window.setTimeout(poll, 1500);
       } catch (reason) {
         if (stopped) return;
@@ -120,9 +134,12 @@ export function Dashboard({ onError, errorMessage, onStartProductConversation }:
         onError(errorMessage(reason, "Aspect 분석 상태를 확인하지 못했습니다."));
       }
     };
+
     poll();
+
     return () => {
       stopped = true;
+
       if (timer) window.clearTimeout(timer);
     };
   }, [patternJobId, selected, errorMessage, onError]);
@@ -144,11 +161,13 @@ export function Dashboard({ onError, errorMessage, onStartProductConversation }:
     if (!selected || patternLoading) return;
     setPatternLoading(true);
     onError("");
+
     try {
       const job = await api<AspectJob>(
         `/api/dashboard/products/${encodeURIComponent(selected)}/patterns`,
         { method: "POST" },
       );
+
       window.sessionStorage.setItem(`ci:aspect-job:${selected}`, job.job_id);
       setPatternJobId(job.job_id);
     } catch (reason) {

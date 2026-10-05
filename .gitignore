@@ -14,6 +14,7 @@ __pycache__/
 node_modules/
 .next/
 .pnpm-store/
+*.tsbuildinfo
 
 # 평가 및 임시 파일
 *.log

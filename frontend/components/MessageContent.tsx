@@ -6,29 +6,55 @@ function inline(text: string): ReactNode[] {
     if (part.startsWith("**") && part.endsWith("**")) {
       return <strong key={index}>{part.slice(2, -2)}</strong>;
     }
+
     if (part.startsWith("`") && part.endsWith("`")) {
       return <code key={index}>{part.slice(1, -1)}</code>;
     }
+
     return <Fragment key={index}>{part}</Fragment>;
   });
 }
 
 
 function tableCells(line: string) {
-  let normalized = line.trim().replaceAll("\\|", "|");
-  if (!normalized.includes("|")) return null;
-  if (normalized.startsWith("|")) normalized = normalized.slice(1);
-  if (normalized.endsWith("|")) normalized = normalized.slice(0, -1);
-  return normalized.split("|").map((cell) => cell.trim());
+  const normalized = line.trim();
+  const cells: string[] = [];
+  let cell = "";
+
+  for (let index = 0; index < normalized.length; index += 1) {
+    const char = normalized[index];
+
+    if (char === "\\" && (normalized[index + 1] === "|" || normalized[index + 1] === "\\")) {
+      cell += normalized[++index];
+    } else if (char === "|") {
+      cells.push(cell.trim());
+      cell = "";
+    } else {
+      cell += char;
+    }
+  }
+
+  if (cells.length === 0) return null;
+  cells.push(cell.trim());
+
+  if (normalized.startsWith("|")) cells.shift();
+
+  if (normalized.endsWith("|") && cells.length > 1 && cells.at(-1) === "") cells.pop();
+
+  return cells;
 }
 
 
 function tableAlignments(line: string) {
   const cells = tableCells(line);
+
   if (!cells || !cells.every((cell) => /^:?-{3,}:?$/.test(cell))) return null;
+
   return cells.map((cell) => {
     if (cell.startsWith(":") && cell.endsWith(":")) return "center";
+
     if (cell.endsWith(":")) return "right";
+
     return "left";
   });
 }
@@ -36,12 +62,17 @@ function tableAlignments(line: string) {
 
 function renderLine(line: string, key: number) {
   if (!line.trim()) return <div className="markdown-space" key={key} />;
+
   if (line.startsWith("### ")) return <h3 key={key}>{inline(line.slice(4))}</h3>;
+
   if (line.startsWith("## ")) return <h2 key={key}>{inline(line.slice(3))}</h2>;
   const unordered = line.match(/^\s*-\s+(.+)$/);
+
   if (unordered) return <div className="markdown-list" key={key}><span>•</span><span>{inline(unordered[1])}</span></div>;
   const ordered = line.match(/^\s*(\d+)\.\s+(.+)$/);
+
   if (ordered) return <div className="markdown-list" key={key}><span>{ordered[1]}.</span><span>{inline(ordered[2])}</span></div>;
+
   return <p key={key}>{inline(line)}</p>;
 }
 
@@ -52,6 +83,7 @@ export function MessageContent({ content }: { content: string }) {
 
   for (let index = 0; index < lines.length;) {
     const headers = tableCells(lines[index]);
+
     const alignments = index + 1 < lines.length
       ? tableAlignments(lines[index + 1])
       : null;
@@ -59,12 +91,15 @@ export function MessageContent({ content }: { content: string }) {
     if (headers && alignments && headers.length === alignments.length) {
       const rows: string[][] = [];
       let nextIndex = index + 2;
+
       while (nextIndex < lines.length) {
         const cells = tableCells(lines[nextIndex]);
+
         if (!cells || cells.length !== headers.length) break;
         rows.push(cells);
         nextIndex += 1;
       }
+
       blocks.push(
         <div className="markdown-table-wrap" key={`table-${index}`}>
           <table className="markdown-table">

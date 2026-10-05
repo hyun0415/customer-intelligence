@@ -158,12 +158,28 @@ export class ApiError extends Error {
   }
 }
 
+type ErrorBody = {
+  detail?: unknown;
+  message?: unknown;
+  msg?: unknown;
+  request_id?: unknown;
+};
+
+function isErrorBody(value: unknown): value is ErrorBody {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === "string";
+}
+
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   // Agent POST를 자동 재시도하면 질문이 중복 저장될 수 있으므로, timeout 시
   // 입력을 복원하고 사용자가 명시적으로 재시도하도록 한다.
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), 130_000);
   let response: Response;
+
   try {
     response = await fetch(path, {
       ...init,
@@ -178,6 +194,7 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
         0,
       );
     }
+
     throw new ApiError(
       "서버에 연결할 수 없습니다. 네트워크 상태를 확인한 뒤 다시 시도해 주세요.",
       0,
@@ -185,23 +202,33 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   } finally {
     window.clearTimeout(timeout);
   }
+
   if (!response.ok) {
-    const payload = await response.json().catch(() => null);
+    const rawPayload: unknown = await response.json().catch(() => null);
+    const payload = isErrorBody(rawPayload) ? rawPayload : null;
     const detail = payload?.detail;
+
     const message =
-      typeof detail === "string"
+      isString(detail)
         ? detail
-        : detail && typeof detail.message === "string"
+        : isErrorBody(detail) && isString(detail.message)
           ? detail.message
         : Array.isArray(detail)
-          ? detail.map((item) => item?.msg ?? JSON.stringify(item)).join(", ")
+          ? detail.map((item) => isErrorBody(item) && isString(item.msg) ? item.msg : JSON.stringify(item)).join(", ")
           : `요청 실패 (${response.status})`;
+
     throw new ApiError(
       message,
       response.status,
-      response.headers.get("X-Request-ID") ?? payload?.request_id,
+      response.headers.get("X-Request-ID") ?? (isString(payload?.request_id) ? payload.request_id : undefined),
     );
   }
-  if (response.status === 204) return undefined as T;
+
+  if (response.status === 204) {
+    // SAFETY: The application's 204 response callers request void, and 204 has no response body.
+    return undefined as T;
+  }
+
+  // SAFETY: Each caller supplies the response contract for its API route; successful JSON is parsed here.
   return response.json() as Promise<T>;
 }

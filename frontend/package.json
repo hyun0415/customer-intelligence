@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "npm run lint:anti-slop",
+    "lint:anti-slop": "oxlint --config oxlint.config.ts app components lib"
   },
   "dependencies": {
     "next": ">=15 <17",
@@ -14,9 +15,11 @@
     "react-dom": ">=19 <20"
   },
   "devDependencies": {
+    "@oxlint/plugins": "1.86.0",
     "@types/node": ">=22 <25",
     "@types/react": ">=19 <20",
     "@types/react-dom": ">=19 <20",
+    "oxlint": "1.86.0",
     "typescript": ">=5.7 <6"
   }
 }
