@@ -6,12 +6,12 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white" alt="Python 3.12">
-  <img src="https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white" alt="FastAPI">
-  <img src="https://img.shields.io/badge/Next.js-000000?logo=nextdotjs&logoColor=white" alt="Next.js">
-  <img src="https://img.shields.io/badge/PostgreSQL%20%2B%20pgvector-4169E1?logo=postgresql&logoColor=white" alt="PostgreSQL and pgvector">
-  <img src="https://img.shields.io/badge/Redis-FF4438?logo=redis&logoColor=white" alt="Redis">
-  <img src="https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white" alt="Docker">
+  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white" alt="Python 3.12"></a>
+  <a href="https://fastapi.tiangolo.com/"><img src="https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white" alt="FastAPI"></a>
+  <a href="https://nextjs.org/"><img src="https://img.shields.io/badge/Next.js-000000?logo=nextdotjs&logoColor=white" alt="Next.js"></a>
+  <a href="https://www.postgresql.org/"><img src="https://img.shields.io/badge/PostgreSQL%20%2B%20pgvector-4169E1?logo=postgresql&logoColor=white" alt="PostgreSQL and pgvector"></a>
+  <a href="https://redis.io/"><img src="https://img.shields.io/badge/Redis-FF4438?logo=redis&logoColor=white" alt="Redis"></a>
+  <a href="https://www.docker.com/"><img src="https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white" alt="Docker"></a>
 </p>
 
 <p align="center">
@@ -45,12 +45,12 @@ invent numbers or policy conditions.
 
 ### 1. Customer review analysis
 
-![Model inputs and outputs in the customer review analysis Agent](docs/assets/diagrams/customer-review-agent-model-io.png)
+![Model inputs and outputs in the customer review analysis Agent](docs/assets/diagrams/customer-review-agent-model-io-en.png)
 
 The Agent selects the SQL Tool that matches the question, and PostgreSQL returns
 statistics and a review sample. The Aspect Extractor structures complaint types,
 sentiment, and evidence spans. Python verifies each span against the original
-review, then aggregates counts and sample-level ratios. The final Agent consumes
+review, then aggregates counts and sample-level ratios. The Agent consumes
 only this validated result.
 
 The [customer review analysis guide](docs/review-analysis/README_EN.md) explains
@@ -59,7 +59,7 @@ trade-off of per-review model calls.
 
 ### 2. Policy Hybrid RAG
 
-![Policy Hybrid RAG retrieval and evidence assessment](docs/assets/diagrams/policy-hybrid-rag-flow.png)
+![Policy Hybrid RAG retrieval and evidence assessment](docs/assets/diagrams/policy-hybrid-rag-flow-en.png)
 
 The server first applies approval status, validity period, product scope,
 collection, jurisdiction, department, and user access. PostgreSQL FTS and
@@ -85,6 +85,8 @@ system returns `no_evidence` instead of inventing a rule.
 The same 24 policy questions were run through each retrieval stage to measure
 how often the correct policy was found and how its rank changed. The final stage
 also checked whether the retrieved document directly answered the question.
+
+![Automated evaluation and model-role transition flow](docs/assets/diagrams/evaluation-model-optimization-flow-en.png)
 
 | Pipeline | Recall@K | MRR | No-evidence F1 | p95 Latency |
 |---|---:|---:|---:|---:|

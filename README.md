@@ -1,17 +1,17 @@
 <h1 align="center">Customer Intelligence Agent</h1>
 
 <p align="center">
-  <strong>고객 리뷰의 정량 지표·원문 근거·적용 가능한 사내 정책을 한 대화에서 확인하는 Agent</strong><br>
-  LLM의 해석 능력은 활용하되, 수치·권한·근거는 코드로 검증합니다.
+  <strong>고객 리뷰의 정량 지표와 원문 근거, 적용 가능한 사내 정책을 한 대화에서 확인하는 에이전트</strong><br>
+  LLM은 해석에 활용하고, 수치와 권한, 근거는 코드로 검증합니다.
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white" alt="Python 3.12">
-  <img src="https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white" alt="FastAPI">
-  <img src="https://img.shields.io/badge/Next.js-000000?logo=nextdotjs&logoColor=white" alt="Next.js">
-  <img src="https://img.shields.io/badge/PostgreSQL%20%2B%20pgvector-4169E1?logo=postgresql&logoColor=white" alt="PostgreSQL and pgvector">
-  <img src="https://img.shields.io/badge/Redis-FF4438?logo=redis&logoColor=white" alt="Redis">
-  <img src="https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white" alt="Docker">
+  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white" alt="Python 3.12"></a>
+  <a href="https://fastapi.tiangolo.com/"><img src="https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white" alt="FastAPI"></a>
+  <a href="https://nextjs.org/"><img src="https://img.shields.io/badge/Next.js-000000?logo=nextdotjs&logoColor=white" alt="Next.js"></a>
+  <a href="https://www.postgresql.org/"><img src="https://img.shields.io/badge/PostgreSQL%20%2B%20pgvector-4169E1?logo=postgresql&logoColor=white" alt="PostgreSQL and pgvector"></a>
+  <a href="https://redis.io/"><img src="https://img.shields.io/badge/Redis-FF4438?logo=redis&logoColor=white" alt="Redis"></a>
+  <a href="https://www.docker.com/"><img src="https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white" alt="Docker"></a>
 </p>
 
 <p align="center">
@@ -48,7 +48,7 @@ LLM이 수치나 정책을 임의로 만들지 못하도록 책임을 분리했�
 
 Agent가 질문에 맞는 SQL Tool을 선택하면 PostgreSQL이 통계와 리뷰 표본을 반환합니다.
 Aspect Extractor는 리뷰별 불만 유형·감성·근거 구절을 구조화하고, Python은 근거가
-원문에 실제로 존재하는지 확인한 뒤 빈도와 표본 내 비율을 집계합니다. 최종 Agent는
+원문에 실제로 존재하는지 확인한 뒤 빈도와 표본 내 비율을 집계합니다. Agent는
 이 검증된 결과만 사용합니다.
 
 [고객 리뷰 분석 문서](docs/review-analysis/README.md)에서 Extractor 스키마, 원문 검증,
@@ -80,6 +80,8 @@ Redis 캐시와 리뷰별 호출의 비용·정확도 trade-off를 확인할 수
 동일한 24개 정책 질문으로 검색 단계를 하나씩 추가하며, 정답 정책을 찾는 비율과
 순위가 어떻게 변하는지 확인했습니다. 마지막 단계에서는 검색된 문서가 질문에 직접
 답할 수 있는지도 별도로 판정했습니다.
+
+![평가 자동화와 모델 역할 전환 흐름](docs/assets/diagrams/evaluation-model-optimization-flow.png)
 
 | Pipeline | Recall@K | MRR | No-evidence F1 | p95 Latency |
 |---|---:|---:|---:|---:|
