@@ -1,105 +1,90 @@
-# Customer Intelligence Agent
+<h1 align="center">Customer Intelligence Agent</h1>
 
-[한국어](README.md)
+<p align="center">
+  <strong>An Agent that connects review metrics, source evidence, and applicable internal policy in one conversation</strong><br>
+  It uses LLMs for interpretation while keeping numbers, access, and evidence under deterministic control.
+</p>
 
-Customer reviews contain valuable product-improvement signals, but practitioners
-must usually select reviews, calculate statistics, and search relevant policies
-in separate workflows. This project brings those tasks into one conversation so
-that users can examine **quantitative indicators, source-review evidence, and
-applicable internal policy together**.
+<p align="center">
+  <img src="https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white" alt="Python 3.12">
+  <img src="https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white" alt="FastAPI">
+  <img src="https://img.shields.io/badge/Next.js-000000?logo=nextdotjs&logoColor=white" alt="Next.js">
+  <img src="https://img.shields.io/badge/PostgreSQL%20%2B%20pgvector-4169E1?logo=postgresql&logoColor=white" alt="PostgreSQL and pgvector">
+  <img src="https://img.shields.io/badge/Redis-FF4438?logo=redis&logoColor=white" alt="Redis">
+  <img src="https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white" alt="Docker">
+</p>
 
-The system uses the flexibility of an LLM without delegating high-cost errors,
-such as numerical calculation and access control, to the model. Review metrics
-come from tested SQL Tools, while policy retrieval applies user permissions and
-validity dates before Hybrid RAG. The goal is to preserve natural-language
-convenience while reducing **fabricated numbers, unsupported policy guidance,
-and exposure of unauthorized documents**.
+<p align="center">
+  <a href="#problem-and-design">Problem &amp; Design</a> ·
+  <a href="#system-flows">System Flows</a> ·
+  <a href="#evaluation-results">Evaluation</a> ·
+  <a href="#quick-start">Quick Start</a> ·
+  <a href="README.md">한국어</a>
+</p>
 
-## Core Design
+![Service screen that cites policy evidence and abstains when evidence is insufficient](docs/assets/screenshots/policy-grounding-and-no-evidence.png)
 
-| Path | Limitation to address | Design choice | Intended effect |
-|---|---|---|---|
-| **Review Analysis** | LLM-generated SQL can change filters and aggregation criteria | Restrict the LLM to selecting tested SQL Tools | Produce quantitative results under consistent rules |
-| **Review Analysis** | Rating statistics alone do not reveal concrete complaint causes | Extract aspects, sentiment, and evidence spans from low-rated reviews, then verify and aggregate them in Python | Connect recurring complaints and priorities to source reviews |
-| **Policy RAG** | Keyword and semantic retrieval can miss different kinds of relevant policy | Fuse PostgreSQL FTS and embedding retrieval with RRF, then rerank with BGE-M3 MaxSim | Preserve both exact policy terminology and semantic similarity |
-| **Policy RAG** | An LLM may answer even when retrieved evidence is insufficient | Classify evidence as `sufficient / insufficient / conflict` | Expose missing or conflicting evidence instead of inventing guidance |
-| **Policy RAG** | Uniform policy access can expose documents outside a user's scope | Enforce collection, jurisdiction, department, and RBAC filters on the server | Retrieve only authorized and currently valid policy |
-| **Shared Evaluation** | A high aggregate score alone does not explain operational reliability | Evaluate Tool accuracy, numerical grounding, evidence quality, and business usefulness | Compare model quality and cost under the same contract |
+> **Scope** — The analysis dataset contains 547 shampoo products and 105,060
+> reviews from the Beauty and Personal Care category of Amazon Reviews 2023.
+> Policies in this repository are synthetic portfolio data, not real company policy.
 
-## Implementation Scope
+## Problem and Design
 
-The analysis dataset contains 547 shampoo products in the Beauty and Personal Care
-category and their 105,060 reviews from Amazon Reviews 2023. Review analysis,
-policy retrieval, evidence assessment, and access control are connected to
-Google OIDC, Redis sessions, and conversation ownership, making the project an
-**MVP for validating an operational workflow rather than a standalone RAG demonstration**.
+Reviewing large volumes of customer feedback, calculating consistent metrics,
+and locating the relevant policy are usually separate tasks. This project joins
+them in one conversation while separating responsibilities so the LLM cannot
+invent numbers or policy conditions.
+
+| Guarantee | Design choice | Outcome |
+|---|---|---|
+| **Accurate numbers** | The LLM selects tested SQL Tools instead of generating SQL | Filters and aggregation rules remain consistent |
+| **Traceable evidence** | Aspect evidence is checked against source reviews, while policy uses Hybrid RAG | Recurring complaints and policy answers remain auditable |
+| **Controlled decisions** | The server enforces access, jurisdiction, and validity before a separate evidence check | Unauthorized documents and unsupported guidance are blocked |
 
 ## System Flows
 
-### Customer review analysis
+### 1. Customer review analysis
 
 ![Model inputs and outputs in the customer review analysis Agent](docs/assets/diagrams/customer-review-agent-model-io.png)
 
-The Agent selects a predefined SQL Tool and PostgreSQL returns the requested
-sample and statistics. The Aspect Extractor structures complaint types and
-evidence spans. Python verifies that each span exists in the original review and
-aggregates counts and sample-level ratios. The final Agent consumes only the
-validated structured result.
+The Agent selects the SQL Tool that matches the question, and PostgreSQL returns
+statistics and a review sample. The Aspect Extractor structures complaint types,
+sentiment, and evidence spans. Python verifies each span against the original
+review, then aggregates counts and sample-level ratios. The final Agent consumes
+only this validated result.
 
-The [customer review analysis guide](docs/review-analysis/README_EN.md) documents
-the Extractor schema, Python source validation, Redis caching, and the trade-offs
-of per-review model calls.
+The [customer review analysis guide](docs/review-analysis/README_EN.md) explains
+the Extractor schema, source validation, Redis caching, and the cost–accuracy
+trade-off of per-review model calls.
 
-### Policy Hybrid RAG
+### 2. Policy Hybrid RAG
 
 ![Policy Hybrid RAG retrieval and evidence assessment](docs/assets/diagrams/policy-hybrid-rag-flow.png)
 
-The retriever first enforces approval status, validity period, product scope,
+The server first applies approval status, validity period, product scope,
 collection, jurisdiction, department, and user access. PostgreSQL FTS and
-embedding retrieval independently find Child chunks. RRF fuses them by Parent,
-BGE-M3 reranks the Parent sections, and a structured LLM classifies evidence as
-`sufficient`, `insufficient`, or `conflict`.
+embedding retrieval independently find Child candidates, and RRF fuses them by
+Parent. BGE-M3 reranks the relevant clauses before a structured LLM classifies
+the evidence as `sufficient`, `insufficient`, or `conflict`.
 
-Candidate counts, Child/Parent responsibilities, policy priority, and failure
-behavior are documented in the [Policy RAG guide](docs/rag/README_EN.md).
+The [Policy RAG guide](docs/rag/README_EN.md) explains Child and Parent roles,
+RRF, BGE-M3 MaxSim, policy priority, and failure behavior.
 
-## Service Screens
+## What the User Sees
 
-| Policy grounding and abstention | Review statistics and complaint patterns |
+| Review metrics and interpretation boundaries | Recurring complaints with source evidence |
 |---|---|
-| ![Policy grounding and insufficient evidence](docs/assets/screenshots/policy-grounding-and-no-evidence.png) | ![Recurring complaint aspects](docs/assets/screenshots/aspect-pattern-evidence.png) |
+| ![Rating distribution and customer response](docs/assets/screenshots/product-review-summary.png) | ![Recurring complaint aspects](docs/assets/screenshots/aspect-pattern-evidence.png) |
 
-When policy evidence is insufficient, the system returns `no_evidence` instead
-of inventing a rule. Review-pattern ratios are explicitly described as ratios
-within the selected sample, not population incidence.
+Review-pattern ratios are explicitly presented as ratios within the selected
+sample, not population incidence. When policy evidence is insufficient, the
+system returns `no_evidence` instead of inventing a rule.
 
-## Design Principles
+## Evaluation Results
 
-- Code enforces SQL accuracy, policy access, source grounding, and safety boundaries.
-- Model interpretation quality is managed through model replacement and evaluation.
-- Responses must not invent numbers, policy conditions, causality, or safety claims.
-- Equal-priority policy conflicts are never resolved arbitrarily by the Agent.
-- Medical and safety cases leave the normal answer path for human review.
-- OpenAI and local models share the same Tool, schema, and evaluation contracts.
-
-## Technology
-
-| Area | Technology |
-|---|---|
-| Agent and LLM | Python, LangGraph, LangChain, OpenAI API, vLLM |
-| Analysis | SQL, pandas, Pydantic, Aspect Term Extraction |
-| RAG | PostgreSQL FTS, pgvector, RRF, BGE-M3 ColBERT MaxSim |
-| Web | FastAPI, Next.js, TypeScript |
-| Identity and state | Google OIDC, Redis, HttpOnly cookies, PostgreSQL audit logs |
-| Deployment and evaluation | Docker Compose, Terraform, EC2, ECR, pytest, LLM Judge |
-
-## Evaluation and Interpretation
-
-The evaluation answers three separate questions: does retrieval find the right
-policy and clause, does the system abstain when evidence is missing, and does the
-Agent select the right Tool and arguments? The same 24 questions with explicit
-gold evidence are used at every RAG stage so each quality gain and latency cost
-can be attributed to the stage that introduced it.
+The same 24 policy questions were run through each retrieval stage to measure
+how often the correct policy was found and how its rank changed. The final stage
+also checked whether the retrieved document directly answered the question.
 
 | Pipeline | Recall@K | MRR | No-evidence F1 | p95 Latency |
 |---|---:|---:|---:|---:|
@@ -109,37 +94,20 @@ can be attributed to the stage that introduced it.
 | Hybrid RRF + BGE-M3 | **1.000** | **0.969** | 0.667 | 736.5 ms |
 | Full pipeline + evidence assessment | **1.000** | **0.969** | **1.000** | 5,703.3 ms |
 
-| Why the result changes | Interpretation |
+| Why the result changes | Observed effect |
 |---|---|
-| FTS and Vector | Retrieve candidates quickly but do not decide whether a related policy actually answers the question |
-| Hybrid RRF + BGE-M3 | Fuse both channels and promote the closest clause, improving MRR |
-| Full pipeline | The final evidence check removes non-answering candidates and correctly separates `no_evidence` cases |
+| FTS and Vector | Retrieve candidates quickly but do not determine whether a related document answers the question |
+| Hybrid RRF + BGE-M3 | Combine exact terminology with semantic search and promote the closest clause, improving MRR |
+| Full pipeline | Remove candidates that cannot support an answer and correctly separate `no_evidence` cases |
 
-Each question collects at most ten candidates from each retrieval channel and
-compares five final evidence sections. These are fixed comparison conditions,
-not values tuned to make one model look better. A separate 11-case access test
-reported 1.000 authorized Recall@5, 1.000 denial accuracy, and zero out-of-scope
-exposures. Because this is a small synthetic policy set, it is not an estimate
+Every stage used the same limit of ten candidates per retrieval channel and a
+final Parent `K=5`. A separate 11-case access evaluation reported 1.000
+authorized Recall@5, 1.000 denial accuracy, and zero out-of-scope exposures.
+Because this is a small synthetic policy set, these numbers are not an estimate
 of accuracy for arbitrary questions. The [evaluation guide](eval/README_EN.md)
-explains the purpose and reproduction steps.
+documents the intent, gold data, and reproduction steps.
 
-## Execution Profiles
-
-The project keeps the same Tool, schema, and evaluation contracts while
-separating models and infrastructure by validation purpose.
-
-| Profile | Purpose | Configuration | Validation status |
-|---|---|---|---|
-| Reproducible Docker environment | Code review and functional reproduction | Next.js, FastAPI, PostgreSQL, Redis, OpenAI API | Core paths and regression tests verified |
-| AWS GPU validation environment | Open-model and reranker compatibility | EC2 L40S, vLLM, Qwen3 and GPT-OSS, BGE-M3 | Representative product-analysis and policy-RAG smoke tests completed |
-| Always-on production environment | Public service operation | Requires separate cost, security, and observability policies | Outside the portfolio scope |
-
-The GPU services are not kept publicly available. Terraform creates the EC2
-validation environment when needed, representative paths are checked, and
-billable resources are then removed. The `localhost` addresses below are
-therefore reproducible entry points, not the limit of the deployment design.
-
-## Reproducible Docker Compose Environment
+## Quick Start
 
 From the repository root, copy `.env.example` and keep real secrets only in the
 ignored `.env` file.
@@ -154,8 +122,6 @@ docker compose --env-file .env `
 - Web: `http://localhost:3000`
 - API readiness: `http://localhost:8000/api/ready`
 
-Start the core regression checks with:
-
 ```powershell
 pytest -q
 python -m eval.run_agent_evaluation
@@ -163,13 +129,50 @@ python -m eval.rag_pipeline_comparison
 ```
 
 Agent and full RAG evaluations require PostgreSQL data and OpenAI API settings.
-Detailed options, paid validation paths, and local-model commands are kept in
-the focused guides below.
+Detailed options, paid validation paths, and local-model commands are separated
+into the [run and deployment guide](deploy/README_EN.md) and the
+[evaluation guide](eval/README_EN.md).
 
-## Project Structure
+## Technology
 
-Only the paths needed to understand execution and core logic are shown. Local
-caches, generated artifacts, and minor helper files are intentionally omitted.
+| Area | Technology |
+|---|---|
+| Agent and analysis | Python, LangGraph, LangChain, Pydantic, pandas |
+| Policy retrieval | PostgreSQL FTS, pgvector, RRF, BGE-M3 ColBERT MaxSim |
+| Web and identity | FastAPI, Next.js, TypeScript, Google OIDC, HttpOnly cookies |
+| State and records | Redis, PostgreSQL conversation, source, and audit records |
+| Deployment and evaluation | Docker Compose, Terraform, EC2, ECR, pytest, LLM Judge |
+
+<details>
+<summary><strong>Design principles</strong></summary>
+
+- Code enforces SQL accuracy, policy access, source grounding, and safety boundaries.
+- Model interpretation quality is managed through model replacement and evaluation.
+- Responses must not invent numbers, policy conditions, causality, or safety claims.
+- Equal-priority policy conflicts are never resolved arbitrarily by the Agent.
+- Medical and safety cases leave the normal answer path for human review.
+- OpenAI and local models share the same Tool, schema, and evaluation contracts.
+
+</details>
+
+<details>
+<summary><strong>Execution profiles</strong></summary>
+
+| Profile | Purpose | Configuration | Validation status |
+|---|---|---|---|
+| Reproducible Docker environment | Code review and functional reproduction | Next.js, FastAPI, PostgreSQL, Redis, OpenAI API | Core paths and regression tests verified |
+| AWS GPU validation environment | Open-model and reranker compatibility | EC2 L40S, vLLM, Qwen3, GPT-OSS, BGE-M3 | Representative product-analysis and policy-RAG smoke tests completed |
+| Always-on production environment | Public service operation | Requires separate cost, security, and observability policies | Outside the portfolio scope |
+
+GPU services are not kept publicly available. Terraform creates the EC2
+environment when needed, representative paths are checked, and billable
+resources are removed afterward. The `localhost` addresses above are therefore
+reproducible entry points, not a limit of the deployment design.
+
+</details>
+
+<details>
+<summary><strong>Project structure</strong></summary>
 
 ```text
 customer-intelligence/
@@ -179,40 +182,40 @@ customer-intelligence/
 │  ├─ analysis/             # Aspect extraction, source validation, and aggregation
 │  ├─ rag/                  # Policy retrieval, RRF, reranking, and evidence assessment
 │  ├─ prompts/              # Agent instructions and grounding rules
-│  ├─ llm/                  # OpenAI and vLLM role configuration and client interfaces
+│  ├─ llm/                  # OpenAI and vLLM client interfaces
 │  ├─ auth/                 # Authentication, sessions, and access control
 │  └─ cache/                # Redis-backed review-analysis cache
 ├─ db/                      # PostgreSQL schema and initialization SQL
-├─ data/                    # Sample policies and evaluation inputs
-├─ eval/                    # Automated Agent, RAG, and LLM-judge evaluation
+├─ data/                    # Synthetic policies and evaluation inputs
+├─ eval/                    # Agent, RAG, and LLM-judge evaluation
 ├─ tests/                   # Tool, analysis, authorization, and regression tests
 ├─ deploy/                  # Docker Compose and AWS deployment scripts
-├─ infra/terraform/         # EC2, ECR, and network infrastructure definitions
+├─ infra/terraform/         # EC2, ECR, and network definitions
 └─ docs/                    # Design guides, diagrams, and interface screenshots
 ```
 
+</details>
+
 ## Documentation
 
-| Guide | Scope |
+| Guide | What it covers |
 |---|---|
-| [Customer review analysis](docs/review-analysis/README_EN.md) | SQL sampling, Aspect Extraction, source validation and aggregation, Redis caching, and limitations |
-| [Policy RAG](docs/rag/README_EN.md) | Ingestion, Child/Parent retrieval, RRF, BGE-M3, priority, and evidence gating |
-| [Evaluation](eval/README_EN.md) | Agent, Tool, Judge, RAG, and local-model evaluation commands and outputs |
+| [Customer review analysis](docs/review-analysis/README_EN.md) | SQL sampling, Aspect Extraction, source validation, aggregation, and Redis caching |
+| [Policy RAG](docs/rag/README_EN.md) | Ingestion, Child and Parent retrieval, RRF, BGE-M3, and evidence assessment |
+| [Evaluation](eval/README_EN.md) | Agent, Tool, and RAG evaluation intent, commands, and result files |
 | [Run and deploy](deploy/README_EN.md) | Local Compose, ECR image publishing, and EC2 deployment |
 | [Terraform](infra/terraform/README_EN.md) | Cost-safe defaults, EC2 provisioning, SSM access, and teardown |
 | [Web architecture](docs/web_architecture.md) | Next.js, FastAPI, OIDC, sessions, and RBAC boundaries |
 | [Model runtime](docs/local_model_runtime.md) | OpenAI, Qwen, GPT-OSS, and Gemma roles and switching |
-| [Review analysis and Policy RAG decision](docs/adr/001-review-analysis-and-policy-rag_EN.md) | Why tested SQL Tools and Policy Hybrid RAG are separated |
+| [Core architecture decision](docs/adr/001-review-analysis-and-policy-rag_EN.md) | Why review SQL Tools and Policy Hybrid RAG are separated |
 
-## Data and Publication Scope
+## Data and Current Status
 
-- Amazon Reviews 2023 is a public research dataset; the full raw corpus is not redistributed here.
-- Included sample policies are synthetic portfolio data, not real company policy.
-- Real `.env` files, OAuth secrets, API keys, database contents, and Terraform state are not embedded in images or Git.
+The full Amazon Reviews 2023 corpus is not redistributed in this repository.
+Real `.env` files, OAuth secrets, API keys, database contents, and Terraform
+state are also excluded from Git.
 
-## Status
-
-The OpenAI Web, Agent, policy retrieval path, and core regression tests are
+The OpenAI Web, Agent, policy retrieval, and primary evaluation paths are
 implemented. Representative Qwen3 and GPT-OSS product-analysis paths and the
-BGE-M3 reranking API were smoke-tested on AWS L40S. A full local-model evaluation
-run and production-grade observability and streaming remain follow-up work.
+BGE-M3 reranking API were validated on AWS L40S. Full local-model evaluation and
+production-grade observability and streaming remain follow-up work.
