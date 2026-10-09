@@ -3,8 +3,8 @@ from typing import Any
 
 import yaml
 
-from .cleaners import clean_html, clean_markdown, normalize_text
 from .models import LoadedPolicyDocument, PolicyMetadata
+from .parsers import PolicyDocumentParser, SimplePolicyParser
 
 
 def _markdown_frontmatter(text: str) -> dict[str, Any]:
@@ -19,20 +19,10 @@ def _markdown_frontmatter(text: str) -> dict[str, Any]:
     return parsed
 
 
-def _load_pdf(path: Path) -> str:
-    try:
-        from pypdf import PdfReader
-    except ImportError as exc:
-        raise RuntimeError("PDF ingestion에는 pypdf 패키지가 필요합니다.") from exc
-
-    reader = PdfReader(path)
-    pages = [page.extract_text() or "" for page in reader.pages]
-    return normalize_text("\n\n".join(pages))
-
-
 def load_policy_document(
     path: str | Path,
     metadata: PolicyMetadata | dict[str, Any] | None = None,
+    parser: PolicyDocumentParser | None = None,
 ) -> LoadedPolicyDocument:
     path = Path(path)
     if not path.is_file():
@@ -42,20 +32,15 @@ def load_policy_document(
     if suffix not in {".md", ".markdown", ".html", ".htm", ".pdf"}:
         raise ValueError(f"지원하지 않는 문서 형식입니다: {suffix}")
 
-    if suffix == ".pdf":
-        raw_content = _load_pdf(path)
-        cleaned_content = raw_content
-        parsed_metadata: dict[str, Any] = {}
-    else:
-        raw_content = path.read_text(encoding="utf-8")
-        parsed_metadata = (
-            _markdown_frontmatter(raw_content) if suffix in {".md", ".markdown"} else {}
-        )
-        cleaned_content = (
-            clean_markdown(raw_content)
-            if parsed_metadata or suffix in {".md", ".markdown"}
-            else clean_html(raw_content)
-        )
+    document_parser = parser or SimplePolicyParser()
+    parsed = document_parser.parse(path)
+    raw_content = parsed.raw_content
+    cleaned_content = parsed.cleaned_content
+    parsed_metadata = (
+        _markdown_frontmatter(raw_content)
+        if suffix in {".md", ".markdown"}
+        else {}
+    )
 
     if metadata is None:
         if not parsed_metadata:
@@ -75,4 +60,6 @@ def load_policy_document(
         metadata=policy_metadata,
         raw_content=raw_content,
         cleaned_content=cleaned_content,
+        parser_name=parsed.parser_name,
+        elements=parsed.elements,
     )

@@ -1,9 +1,10 @@
 from collections.abc import Callable
 
+from eval.failure_analysis import classify_agent_failures
+
 from .judge import LLMJudge
 from .rule_checker import run_rule_checks
 from .schemas import RuleCheckResult
-
 
 SCORE_WEIGHTS = {
     "accuracy_score": 0.35,
@@ -132,6 +133,23 @@ def apply_rule_caps(
             "accuracy를 최대 4점으로 제한했습니다."
         )
 
+    if not all(
+        (
+            rule_result.policy_status_pass,
+            rule_result.policy_sources_pass,
+            rule_result.policy_rule_keys_pass,
+            rule_result.policy_facts_pass,
+            rule_result.no_evidence_abstention_pass,
+        )
+    ):
+        final_scores["grounding_score"] = cap_score(
+            final_scores["grounding_score"], 2
+        )
+        adjustments.append(
+            "정책 상태, 출처, 조항, 정답 근거 또는 no_evidence 보류 규칙 불일치로 "
+            "grounding을 최대 2점으로 제한했습니다."
+        )
+
     return final_scores, adjustments
 
 
@@ -199,8 +217,9 @@ def evaluate_case(
 
         evaluated_case["judge_status"] = "completed"
         evaluated_case["judge_error"] = ""
+        evaluated_case["failure_types"] = classify_agent_failures(evaluated_case)
 
-    except Exception as error:
+    except Exception as error:  # noqa: BLE001 - preserve each evaluation failure in the report
         evaluated_case["judge_status"] = "error"
         evaluated_case["judge_error"] = str(error)
 

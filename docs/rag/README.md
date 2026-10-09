@@ -52,11 +52,16 @@ FTS와 Embedding은 한쪽 결과를 다른 쪽의 입력으로 사용하는 순
 
 | 채널 | 검색 대상 | 기본 후보 수 | 기준 |
 |---|---|---:|---|
-| PostgreSQL FTS | Child | 최대 10 | `plainto_tsquery('simple')` + `ts_rank_cd` |
+| PostgreSQL FTS | Child | 최대 10 | 핵심어 OR `websearch_to_tsquery('simple')` + `ts_rank_cd` |
 | pgvector | Child | 최대 10 | cosine similarity, 기본 하한 0.33 |
 
-FTS는 BM25가 아닙니다. PostgreSQL의 cover-density ranking인 `ts_rank_cd`를
-사용합니다. 명시적인 키워드 일치는 Vector 유사도 하한과 관계없이 유지됩니다.
+FTS는 BM25가 아닙니다. 질문에서 검색 가능한 핵심어를 추출·중복 제거하고, 한국어
+조사와 `15만원 → 150,000원` 같은 금액 표기를 정규화한 뒤 OR 조건의
+`websearch_to_tsquery`로 후보를 만든 뒤 PostgreSQL의 cover-density ranking인
+`ts_rank_cd`로 정렬합니다. 따라서 질문의 모든 어절이 동시에 존재해야 했던 기존
+`plainto_tsquery` 방식보다 자연어 질문에 강하며, 사용자 문자열은 계속 SQL
+parameter로 전달됩니다. 명시적인 키워드 일치는 Vector 유사도 하한과 관계없이
+유지됩니다.
 
 Embedding 구성은 실행 프로필에 따라 달라집니다.
 
@@ -167,9 +172,10 @@ Parent → 조건, 예외, 처리 기준을 함께 평가하는 재정렬과 근
 | 질문 최대 길이 | 256 tokens |
 | Parent 최대 길이 | 2,048 tokens |
 | 처리 batch | 2 |
-| 재정렬 대상 | RRF로 통합된 Parent 후보 전체 |
+| 재정렬 대상 | RRF 상위 Parent 10개 |
 | 사용 점수 | BGE-M3 ColBERT MaxSim |
 
+RRF 통합 후보가 10개보다 많으면 RRF 순서의 상위 10개만 BGE-M3에 전달합니다.
 Parent가 2,048 tokens를 초과하면 뒷부분이 잘릴 수 있고, 후보 수가 많을수록 토큰 간
 비교량과 GPU 메모리 사용량이 증가합니다. 따라서 MaxSim은 전체 정책을 탐색하는 1차
 검색기가 아니라, RRF가 좁힌 후보를 정밀하게 비교하는 2차 재정렬기로 사용합니다.
@@ -204,11 +210,13 @@ Timeout 또는 실행 오류 → 기존 RRF 순서 유지 + 오류 metadata 기�
 우선순위 처리 후 기본 상위 5개 Parent를 근거 판정기에 전달합니다. Tool의 `limit`은
 1~20 범위에서 변경할 수 있습니다. 구조화 LLM은 다음 상태만 판정합니다.
 
-- `sufficient`: 질문의 핵심 조건을 정책이 직접 뒷받침함
+- `sufficient`: 질문의 핵심 조건을 정책이 직접 뒷받침하여 긍정 또는 부정으로 답할 수 있음
 - `insufficient`: 주제는 유사하지만 금액, 기한, 자격, 예외 등 핵심 조건이 부족함
 - `conflict`: 제공된 근거들이 양립할 수 없는 결론을 제시함
 
 판정기가 실패하면 답변을 강행하지 않고 `no_evidence`로 닫습니다. `sufficient`로
+판정할 때는 질문의 주장이 참인지가 아니라 정책만으로 답을 결정할 수 있는지를 봅니다.
+따라서 정책 임계치에 미달한다는 명시적 부정 답변도 충분한 근거로 인정합니다.
 선택된 Parent만 최종 Agent가 인용합니다.
 
 ## 정책 적재
@@ -225,6 +233,12 @@ python -m src.rag.ingestion <internal-policy-manifest.csv>
 예시 manifest는 [internal_policy_manifest.example.csv](internal_policy_manifest.example.csv)에
 있습니다. 실제 정책 원문과 비밀값은 저장소에 포함하지 않습니다.
 
+기본 `simple` parser는 Markdown/HTML과 텍스트 레이어 PDF를 처리합니다. PDF의 제목,
+섹션 계층, 목록, 표, 페이지와 요소 유형을 더 보존해야 할 때만 Docling을 선택할 수
+있습니다. Docling도 같은 공통 문서 구조를 거쳐 기존 Parent-Child Chunker로 들어가며,
+OCR과 표 구조 분석은 각각 명시적으로 켠 경우에만 사용합니다. 설치와 동일 평가 세트
+비교 절차는 [평가 안내](../../eval/README.md#7-정책-parser-비교)에 있습니다.
+
 ## 주요 설정
 
 | 환경변수 | 기본값 | 설명 |
@@ -233,6 +247,7 @@ python -m src.rag.ingestion <internal-policy-manifest.csv>
 | `RAG_RRF_K` | `60` | RRF 완충 상수 |
 | `RAG_MINIMUM_RELEVANCE_SIMILARITY` | `0.33` | Vector 후보 최소 cosine similarity |
 | `RAG_RERANKER_ENABLED` | `true` | BGE-M3 재정렬 사용 여부 |
+| `RAG_RERANKER_CANDIDATE_LIMIT` | `10` | RRF 이후 BGE-M3에 전달할 Parent 수 |
 | `RAG_RERANKER_BASE_URL` | 없음 | 별도 GPU reranker 주소 |
 | `RAG_RERANKER_FALLBACK_TO_RRF` | `true` | 재정렬 실패 시 RRF 복귀 |
 | `RAG_EVIDENCE_VALIDATION_ENABLED` | `true` | LLM 근거 판정 사용 여부 |
@@ -244,6 +259,7 @@ python -m src.rag.ingestion <internal-policy-manifest.csv>
 - Embedding provider: `src/rag/embeddings.py`
 - BGE-M3 재정렬: `src/rag/rerankers.py`
 - 근거 판정: `src/rag/evidence.py`
+- 정책 parser 공통 인터페이스: `src/rag/parsers.py`
 - DB 스키마: `db/migrations/004_policy_rag.sql`
 - 설계 결정: [ADR-001](../adr/001-review-analysis-and-policy-rag.md)
 - 평가 명령: [평가 안내](../../eval/README.md)

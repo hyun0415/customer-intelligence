@@ -1,5 +1,6 @@
 from eval.rules.answer_checker import check_answer
 from eval.rules.numeric_checker import check_numbers
+from eval.rules.policy_checker import check_policy_grounding
 from eval.rules.tool_checker import check_tool
 
 from .schemas import RuleCheckResult
@@ -9,11 +10,13 @@ def run_rule_checks(case: dict) -> RuleCheckResult:
     answer_result = check_answer(case)
     tool_result = check_tool(case)
     numeric_result = check_numbers(case)
+    policy_result = check_policy_grounding(case)
 
     notes = [
         *answer_result.notes,
         *tool_result.notes,
         *numeric_result.notes,
+        *policy_result.notes,
     ]
 
     return RuleCheckResult(
@@ -31,5 +34,10 @@ def run_rule_checks(case: dict) -> RuleCheckResult:
         unsupported_numbers=(
             numeric_result.unsupported_numbers
         ),
+        policy_status_pass=policy_result.status_pass,
+        policy_sources_pass=policy_result.sources_pass,
+        policy_rule_keys_pass=policy_result.rule_keys_pass,
+        policy_facts_pass=policy_result.facts_pass,
+        no_evidence_abstention_pass=policy_result.no_evidence_abstention_pass,
         rule_notes=notes,
     )

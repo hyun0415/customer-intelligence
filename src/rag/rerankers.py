@@ -28,13 +28,21 @@ class RemoteColbertReranker:
     def score(self, query: str, passages: Sequence[str]) -> list[float]:
         if not passages:
             return []
+        headers = {
+            "Content-Type": "application/json; charset=utf-8",
+            "ngrok-skip-browser-warning": "true",
+        }
+        if self.settings.reranker_api_key:
+            headers["Authorization"] = (
+                f"Bearer {self.settings.reranker_api_key}"
+            )
         request = Request(
             urljoin(self.settings.reranker_base_url.rstrip("/") + "/", "rerank"),
             data=json.dumps(
                 {"query": query, "passages": list(passages)},
                 ensure_ascii=False,
             ).encode("utf-8"),
-            headers={"Content-Type": "application/json; charset=utf-8"},
+            headers=headers,
             method="POST",
         )
         with self._opener(

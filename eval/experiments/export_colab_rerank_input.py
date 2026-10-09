@@ -71,6 +71,8 @@ def build_export_payload(
                 "question": case.question,
                 "expected_status": case.expected_status,
                 "expected_source_ids": case.expected_source_ids,
+                "expected_rule_keys": case.expected_rule_keys,
+                "expected_facts": case.expected_facts,
                 "candidates": collect_candidates(retriever, case.request()),
             }
         )

@@ -54,12 +54,17 @@ channels, not a sequential filter where one channel limits the other.
 
 | Channel | Unit | Default candidates | Ranking |
 |---|---|---:|---|
-| PostgreSQL FTS | Child | Up to 10 | `plainto_tsquery('simple')` + `ts_rank_cd` |
+| PostgreSQL FTS | Child | Up to 10 | OR-connected terms with `websearch_to_tsquery('simple')` + `ts_rank_cd` |
 | pgvector | Child | Up to 10 | Cosine similarity with a default 0.33 threshold |
 
-The FTS rank is not BM25. It uses PostgreSQL cover-density ranking through
-`ts_rank_cd`. Explicit FTS matches are retained independently of the Vector
-similarity threshold.
+The FTS rank is not BM25. Searchable terms are extracted and deduplicated from
+the question, Korean particles and monetary forms such as
+`15만원 → 150,000원` are normalized, and terms are connected with OR through
+`websearch_to_tsquery` and ranked with
+PostgreSQL cover-density ranking through `ts_rank_cd`. This handles natural
+language questions better than the former `plainto_tsquery` requirement that
+all terms match. User text remains a SQL parameter. Explicit FTS matches are
+retained independently of the Vector similarity threshold.
 
 Embedding configuration depends on the runtime profile.
 
@@ -172,10 +177,11 @@ reranker focuses on fine-grained token interaction.
 | Maximum query length | 256 tokens |
 | Maximum Parent length | 2,048 tokens |
 | Batch size | 2 |
-| Reranking input | All RRF-fused Parent candidates |
+| Reranking input | Top 10 Parents by RRF |
 | Score | BGE-M3 ColBERT MaxSim |
 
-Parents longer than 2,048 tokens may be truncated, and more candidates increase
+When fusion produces more than ten Parents, only the RRF top ten are sent to
+BGE-M3. Parents longer than 2,048 tokens may be truncated, and more candidates increase
 token comparisons and GPU memory use. MaxSim is therefore a second-stage
 reranker over the candidates narrowed by RRF, not a first-stage scanner over the
 entire policy corpus.
@@ -212,12 +218,15 @@ choice.
 After priority resolution, the default top five Parents are sent to the evidence
 validator. Tool callers may set `limit` from 1 to 20. The structured LLM returns:
 
-- `sufficient`: policy directly supports the material conditions in the question
+- `sufficient`: policy directly supports the material conditions needed for either a positive or negative answer
 - `insufficient`: the topic is related but a material amount, deadline, eligibility rule, or exception is missing
 - `conflict`: supplied evidence supports incompatible conclusions
 
-Evidence-validator failure is fail-closed as `no_evidence`. Only supported
-Parents are exposed to the final Agent.
+Evidence-validator failure is fail-closed as `no_evidence`. The validator
+checks whether the policy can determine the answer, not whether
+the proposition in the question is true. A policy-defined threshold that the
+given facts do not meet is therefore sufficient evidence for a negative answer.
+Only supported Parents are exposed to the final Agent.
 
 ## Policy Ingestion
 
@@ -234,6 +243,13 @@ The example manifest is
 [internal_policy_manifest.example.csv](internal_policy_manifest.example.csv).
 Real policy content and secrets are not committed.
 
+The default `simple` parser handles Markdown, HTML, and text-layer PDFs. Docling
+is optional when PDF titles, section hierarchy, lists, tables, pages, and element
+types need stronger preservation. Both parsers emit the same document structure
+and feed the existing Parent-Child Chunker. OCR and table reconstruction run only
+when explicitly enabled. Installation and same-suite comparison are documented in
+the [evaluation guide](../../eval/README_EN.md#7-policy-parser-comparison).
+
 ## Main Settings
 
 | Variable | Default | Purpose |
@@ -242,6 +258,7 @@ Real policy content and secrets are not committed.
 | `RAG_RRF_K` | `60` | RRF smoothing constant |
 | `RAG_MINIMUM_RELEVANCE_SIMILARITY` | `0.33` | Minimum Vector cosine similarity |
 | `RAG_RERANKER_ENABLED` | `true` | Enable BGE-M3 reranking |
+| `RAG_RERANKER_CANDIDATE_LIMIT` | `10` | Parent candidates sent to BGE-M3 after RRF |
 | `RAG_RERANKER_BASE_URL` | unset | Separate GPU reranker endpoint |
 | `RAG_RERANKER_FALLBACK_TO_RRF` | `true` | Restore RRF order after reranker failure |
 | `RAG_EVIDENCE_VALIDATION_ENABLED` | `true` | Enable the LLM evidence gate |
@@ -253,6 +270,7 @@ Real policy content and secrets are not committed.
 - Embedding providers: `src/rag/embeddings.py`
 - BGE-M3 reranking: `src/rag/rerankers.py`
 - Evidence assessment: `src/rag/evidence.py`
+- Shared policy parser interface: `src/rag/parsers.py`
 - Database schema: `db/migrations/004_policy_rag.sql`
 - Design decision: [ADR-001](../adr/001-review-analysis-and-policy-rag_EN.md)
 - Evaluation commands: [Evaluation guide](../../eval/README_EN.md)

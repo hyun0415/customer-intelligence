@@ -1,0 +1,2 @@
+# Optional policy-parser dependency. The default simple parser does not require it.
+docling>=2.68,<3

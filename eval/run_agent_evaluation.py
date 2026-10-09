@@ -1,15 +1,18 @@
+import argparse
 import csv
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
-from .questions import EVAL_CASES
-
-# tests/test_agent.py에서 사용하는 실제 import 경로로 수정
-from src.agent import run_agent
+from eval.failure_analysis import classify_agent_failures
 from eval.rules.tool_checker import (
+    check_expected_args,
     evaluate_required_tool_execution,
 )
+from src.agent import run_agent
+
+from .questions import EVAL_CASES
+from .rag_questions import RAG_EVAL_CASES
 
 VALID_ASIN = "B00RWCDM4A"
 INVALID_ASIN = "ZZZZZZZZZZ"
@@ -209,7 +212,7 @@ def run_case(case):
             and tool_execution_pass
         )
 
-        return {
+        case_result = {
             **case,
             "question": question,
             "status": "completed",
@@ -229,9 +232,14 @@ def run_case(case):
             "total_score": "",
             "review_notes": "",
         }
+        expected_args_pass, missing_expected_args = check_expected_args(case_result)
+        case_result["expected_args_pass"] = expected_args_pass
+        case_result["missing_expected_args"] = missing_expected_args
+        case_result["failure_types"] = classify_agent_failures(case_result)
+        return case_result
 
-    except Exception as error:
-        return {
+    except Exception as error:  # noqa: BLE001 - continue the suite and record the case failure
+        case_result = {
             **case,
             "question": question,
             "status": "error",
@@ -254,13 +262,16 @@ def run_case(case):
             "review_notes": str(error),
             "tool_selection_pass": False,
             "tool_execution_pass": False,
-            "tool_pass": False,
             "missing_successful_tools": case.get(
                 "required_tools",
                 case.get("expected_tools", []),
             ),
             "failed_tool_executions": [],
         }
+        case_result["expected_args_pass"] = not bool(case.get("expected_args"))
+        case_result["missing_expected_args"] = []
+        case_result["failure_types"] = classify_agent_failures(case_result)
+        return case_result
 
 
 def save_json(results, output_path):
@@ -282,6 +293,9 @@ def save_csv(results, output_path):
         "tool_pass",
         "tool_selection_pass",
         "tool_execution_pass",
+        "expected_args_pass",
+        "missing_expected_args",
+        "failure_types",
         "missing_successful_tools",
         "failed_tool_executions",
         "alternative_tool_pass",
@@ -330,18 +344,40 @@ def print_summary(results):
         result["tool_pass"]
         for result in results
     )
+    argument_cases = [result for result in results if result.get("expected_args")]
+    argument_passed = sum(
+        result.get("expected_args_pass", False) for result in argument_cases
+    )
 
     print()
     print("평가 실행 완료")
     print(f"- 실행 완료: {completed}/{len(results)}")
     print(f"- 도구 선택 통과: {tool_passed}/{len(results)}")
+    print(f"- 도구 인자 통과: {argument_passed}/{len(argument_cases)}")
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--suite",
+        choices=("review", "policy", "all"),
+        default="review",
+        help="기존 review 15건, policy 결합 사례 또는 전체를 선택합니다.",
+    )
+    return parser.parse_args()
 
 
 def main():
+    args = parse_args()
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    results = [run_case(case) for case in EVAL_CASES]
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    cases = {
+        "review": EVAL_CASES,
+        "policy": RAG_EVAL_CASES,
+        "all": [*EVAL_CASES, *RAG_EVAL_CASES],
+    }[args.suite]
+    results = [run_case(case) for case in cases]
 
     json_path = OUTPUT_DIR / f"evaluation_{timestamp}.json"
     csv_path = OUTPUT_DIR / f"evaluation_{timestamp}.csv"

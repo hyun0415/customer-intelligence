@@ -4,6 +4,8 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
+from eval.rules.tool_checker import check_expected_args
+
 
 def safe_set(value: Any) -> set[str]:
     if not isinstance(value, list):
@@ -366,6 +368,10 @@ def build_tool_metrics(
 
     unlisted_call_cases = sum(bool(case["unlisted_tools"]) for case in case_metrics)
     optional_usage = build_optional_usage(case_metrics)
+    argument_cases = [case for case in results if case.get("expected_args")]
+    argument_passed_cases = sum(
+        check_expected_args(case)[0] for case in argument_cases
+    )
 
     return {
         "total_cases": total_cases,
@@ -373,6 +379,13 @@ def build_tool_metrics(
         "tool_pass_rate": divide(
             tool_passed_cases,
             total_cases,
+        ),
+        "tool_selection_accuracy": divide(tool_passed_cases, total_cases),
+        "tool_argument_cases": len(argument_cases),
+        "tool_argument_passed_cases": argument_passed_cases,
+        "tool_argument_accuracy": divide(
+            argument_passed_cases,
+            len(argument_cases),
         ),
         "alternative_cases": len(alternative_cases),
         "alternative_passed_cases": (alternative_passed_cases),

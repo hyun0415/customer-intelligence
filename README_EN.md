@@ -95,21 +95,33 @@ within the selected sample, not population incidence.
 
 ## Evaluation and Interpretation
 
-The project separates guarantees enforced by code from language quality that
-remains model-dependent instead of presenting one near-perfect aggregate score.
+The evaluation answers three separate questions: does retrieval find the right
+policy and clause, does the system abstain when evidence is missing, and does the
+Agent select the right Tool and arguments? The same 24 questions with explicit
+gold evidence are used at every RAG stage so each quality gain and latency cost
+can be attributed to the stage that introduced it.
 
-| Layer | What it checks | Interpretation boundary |
-|---|---|---|
-| Tool | Required, optional, and forbidden Tools and arguments | Routing regression for defined business scenarios |
-| Rule checker | Unsupported SQL numbers, evidence spans, and sample wording | Violations of system invariants |
-| Policy RAG | Access, retrieval, reranking, sufficiency, and conflict states | Approved evaluation policies and questions |
-| LLM Judge | Accuracy, grounding, analysis, and actionability | Relative model comparison and failure analysis |
-| Security and safety | Ownership, RBAC, and escalation | Boundaries that restrict automated decisions |
+| Pipeline | Recall@K | MRR | No-evidence F1 | p95 Latency |
+|---|---:|---:|---:|---:|
+| FTS Only | **1.000** | 0.865 | 0.667 | **67.4 ms** |
+| Vector Only | 0.875 | 0.812 | 0.714 | 68.7 ms |
+| Hybrid RRF | **1.000** | 0.896 | 0.667 | 115.9 ms |
+| Hybrid RRF + BGE-M3 | **1.000** | **0.969** | 0.667 | 736.5 ms |
+| Full pipeline + evidence assessment | **1.000** | **0.969** | **1.000** | 5,703.3 ms |
 
-The suite includes 15 customer and product scenarios plus stage-by-stage policy
-RAG evaluation. Passing the fixed set does not guarantee performance for every
-possible query, so failures and regression rules are recorded together. See the
-[evaluation guide](eval/README_EN.md) for commands and outputs.
+| Why the result changes | Interpretation |
+|---|---|
+| FTS and Vector | Retrieve candidates quickly but do not decide whether a related policy actually answers the question |
+| Hybrid RRF + BGE-M3 | Fuse both channels and promote the closest clause, improving MRR |
+| Full pipeline | The final evidence check removes non-answering candidates and correctly separates `no_evidence` cases |
+
+Each question collects at most ten candidates from each retrieval channel and
+compares five final evidence sections. These are fixed comparison conditions,
+not values tuned to make one model look better. A separate 11-case access test
+reported 1.000 authorized Recall@5, 1.000 denial accuracy, and zero out-of-scope
+exposures. Because this is a small synthetic policy set, it is not an estimate
+of accuracy for arbitrary questions. The [evaluation guide](eval/README_EN.md)
+explains the purpose and reproduction steps.
 
 ## Execution Profiles
 
@@ -147,7 +159,7 @@ Start the core regression checks with:
 ```powershell
 pytest -q
 python -m eval.run_agent_evaluation
-python -m eval.rag_pipeline_comparison --stages baseline,rerank,full
+python -m eval.rag_pipeline_comparison
 ```
 
 Agent and full RAG evaluations require PostgreSQL data and OpenAI API settings.

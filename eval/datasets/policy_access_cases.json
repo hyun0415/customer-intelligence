@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "dataset_version": "2026-10-09",
+  "description": "정책 Collection·관할·부서·상품·유효기간·빈 권한 접근 통제 평가 세트",
+  "labeling_method": "합성 정책 manifest의 서버 강제 범위를 기준으로 허용·차단 쌍을 수작업 구성",
+  "policy_scope": "data/rag/internal_policies synthetic approved policies",
+  "cases": [
+    {
+      "case_id": "AC01", "category": "collection_allowed",
+      "question": "무료 재배송 횟수를 알려줘.",
+      "collections": ["compensation_policy"],
+      "access_grants": [{"collection": "compensation_policy", "jurisdiction": "KR", "department": "CS"}],
+      "expected_status": "ok",
+      "expected_source_ids": ["sample_commerce_reshipment_policy"],
+      "forbidden_source_ids": []
+    },
+    {
+      "case_id": "AC02", "category": "collection_denied",
+      "question": "무료 재배송 횟수를 알려줘.",
+      "collections": ["compensation_policy"],
+      "access_grants": [{"collection": "promotion_policy", "jurisdiction": "KR", "department": "CS"}],
+      "expected_status": "no_evidence",
+      "expected_source_ids": [],
+      "forbidden_source_ids": ["sample_commerce_reshipment_policy"]
+    },
+    {
+      "case_id": "AC03", "category": "jurisdiction_allowed",
+      "question": "파손 상품 환불 접수 기한을 알려줘.",
+      "collections": ["compensation_policy"], "jurisdiction": "KR",
+      "access_grants": [{"collection": "compensation_policy", "jurisdiction": "KR", "department": "CS"}],
+      "expected_status": "ok",
+      "expected_source_ids": ["sample_commerce_refund_policy"],
+      "forbidden_source_ids": []
+    },
+    {
+      "case_id": "AC04", "category": "jurisdiction_denied",
+      "question": "파손 상품 환불 접수 기한을 알려줘.",
+      "collections": ["compensation_policy"], "jurisdiction": "JP",
+      "access_grants": [{"collection": "compensation_policy", "jurisdiction": "JP", "department": "CS"}],
+      "expected_status": "no_evidence",
+      "expected_source_ids": [],
+      "forbidden_source_ids": ["sample_commerce_refund_policy"]
+    },
+    {
+      "case_id": "AC05", "category": "department_allowed",
+      "question": "무료 재배송 횟수를 알려줘.",
+      "collections": ["compensation_policy"], "department": "CS",
+      "access_grants": [{"collection": "compensation_policy", "jurisdiction": "KR", "department": "CS"}],
+      "expected_status": "ok",
+      "expected_source_ids": ["sample_commerce_reshipment_policy"],
+      "forbidden_source_ids": []
+    },
+    {
+      "case_id": "AC06", "category": "department_denied",
+      "question": "무료 재배송 횟수를 알려줘.",
+      "collections": ["compensation_policy"], "department": "LEGAL",
+      "access_grants": [{"collection": "compensation_policy", "jurisdiction": "KR", "department": "LEGAL"}],
+      "expected_status": "no_evidence",
+      "expected_source_ids": [],
+      "forbidden_source_ids": ["sample_commerce_reshipment_policy"]
+    },
+    {
+      "case_id": "AC07", "category": "product_allowed",
+      "question": "B00RWCDM4A 상품의 눈 자극 처리 절차를 알려줘.",
+      "collections": ["product_operation_guides"], "parent_asin": "B00RWCDM4A",
+      "access_grants": [{"collection": "product_operation_guides", "jurisdiction": "KR", "department": "CS"}],
+      "expected_status": "ok",
+      "expected_source_ids": ["sample_commerce_product_specific_cs_guide"],
+      "forbidden_source_ids": []
+    },
+    {
+      "case_id": "AC08", "category": "product_denied",
+      "question": "B00UNKNOWN 상품의 눈 자극 처리 절차를 알려줘.",
+      "collections": ["product_operation_guides"], "parent_asin": "B00UNKNOWN",
+      "access_grants": [{"collection": "product_operation_guides", "jurisdiction": "KR", "department": "CS"}],
+      "expected_status": "no_evidence",
+      "expected_source_ids": [],
+      "forbidden_source_ids": ["sample_commerce_product_specific_cs_guide"]
+    },
+    {
+      "case_id": "AC09", "category": "effective_date_allowed",
+      "question": "무료 재배송 횟수를 알려줘.",
+      "collections": ["compensation_policy"], "effective_at": "2026-09-02T00:00:00+09:00",
+      "access_grants": [{"collection": "compensation_policy", "jurisdiction": "KR", "department": "CS"}],
+      "expected_status": "ok",
+      "expected_source_ids": ["sample_commerce_reshipment_policy"],
+      "forbidden_source_ids": []
+    },
+    {
+      "case_id": "AC10", "category": "effective_date_denied",
+      "question": "무료 재배송 횟수를 알려줘.",
+      "collections": ["compensation_policy"], "effective_at": "2026-08-31T00:00:00+09:00",
+      "access_grants": [{"collection": "compensation_policy", "jurisdiction": "KR", "department": "CS"}],
+      "expected_status": "no_evidence",
+      "expected_source_ids": [],
+      "forbidden_source_ids": ["sample_commerce_reshipment_policy"]
+    },
+    {
+      "case_id": "AC11", "category": "empty_grants",
+      "question": "무료 재배송 횟수를 알려줘.",
+      "collections": ["compensation_policy"],
+      "access_grants": [],
+      "expected_status": "no_evidence",
+      "expected_source_ids": [],
+      "forbidden_source_ids": ["sample_commerce_reshipment_policy"],
+      "expect_external_calls_skipped": true
+    }
+  ]
+}

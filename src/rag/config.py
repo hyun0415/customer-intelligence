@@ -95,6 +95,9 @@ class RagSettings:
     reranker_base_url: str | None = field(
         default_factory=lambda: os.getenv("RAG_RERANKER_BASE_URL") or None
     )
+    reranker_api_key: str | None = field(
+        default_factory=lambda: os.getenv("RAG_RERANKER_API_KEY") or None
+    )
     reranker_timeout_seconds: float = field(
         default_factory=lambda: float(
             os.getenv("RAG_RERANKER_TIMEOUT_SECONDS", "60")
@@ -102,6 +105,9 @@ class RagSettings:
     )
     reranker_batch_size: int = field(
         default_factory=lambda: int(os.getenv("RAG_RERANKER_BATCH_SIZE", "2"))
+    )
+    reranker_candidate_limit: int = field(
+        default_factory=lambda: int(os.getenv("RAG_RERANKER_CANDIDATE_LIMIT", "10"))
     )
     reranker_query_max_tokens: int = field(
         default_factory=lambda: int(os.getenv("RAG_RERANKER_QUERY_MAX_TOKENS", "256"))
@@ -156,8 +162,8 @@ class RagSettings:
             raise ValueError("RRF와 candidate 설정은 양수여야 합니다.")
         if not 0.0 <= self.minimum_relevance_similarity <= 1.0:
             raise ValueError("최소 관련성 cosine similarity는 0~1 사이여야 합니다.")
-        if self.reranker_batch_size <= 0:
-            raise ValueError("reranker batch size는 양수여야 합니다.")
+        if self.reranker_batch_size <= 0 or self.reranker_candidate_limit <= 0:
+            raise ValueError("reranker batch size와 candidate limit은 양수여야 합니다.")
         if self.reranker_timeout_seconds <= 0:
             raise ValueError("reranker timeout은 양수여야 합니다.")
         if self.reranker_query_max_tokens <= 0 or self.reranker_passage_max_tokens <= 0:

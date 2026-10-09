@@ -1,7 +1,8 @@
+import re
 from collections import defaultdict
 from collections.abc import Callable
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Literal
 
 from openai import OpenAIError
 from pgvector.vector import Vector
@@ -17,9 +18,72 @@ from .models import (
     KnowledgeSearchResponse,
     KnowledgeSource,
     PolicyConflict,
+    stable_policy_clause_key,
 )
 from .repository import ConnectionFactory, rag_connect
 from .rerankers import BGEM3ColbertReranker, RemoteColbertReranker, Reranker
+
+RetrievalMode = Literal["fts", "vector", "hybrid"]
+
+LEXICAL_TOKEN_PATTERN = re.compile(r"[0-9A-Za-z가-힣]+")
+TEN_THOUSAND_WON_PATTERN = re.compile(r"^(\d+)만원$")
+KOREAN_PARTICLE_SUFFIXES = (
+    "으로부터",
+    "에게서",
+    "에서",
+    "에게",
+    "보다",
+    "까지",
+    "으로",
+    "은",
+    "는",
+    "이",
+    "가",
+    "을",
+    "를",
+    "의",
+)
+LEXICAL_STOPWORDS = frozenset(
+    {
+        "알려줘",
+        "알려주세요",
+        "어떻게",
+        "무엇인가",
+        "있는가",
+        "가능한가",
+        "맞는가",
+        "인가",
+        "누구인가",
+        "회까지",
+        "경우",
+        "대한",
+    }
+)
+
+
+def _normalize_lexical_token(token: str) -> str:
+    for suffix in KOREAN_PARTICLE_SUFFIXES:
+        if token.endswith(suffix) and len(token) - len(suffix) >= 2:
+            token = token[: -len(suffix)]
+            break
+    money_match = TEN_THOUSAND_WON_PATTERN.fullmatch(token)
+    if money_match:
+        won = int(money_match.group(1)) * 10_000
+        return f"{won:,}원"
+    return token
+
+
+def build_fts_websearch_query(question: str) -> str:
+    """한국어 질문을 안전한 OR 기반 PostgreSQL websearch 질의로 바꾼다."""
+    terms = []
+    for raw_token in LEXICAL_TOKEN_PATTERN.findall(question.lower()):
+        if raw_token in LEXICAL_STOPWORDS:
+            continue
+        token = _normalize_lexical_token(raw_token)
+        if len(token) < 2 or token in LEXICAL_STOPWORDS or token in terms:
+            continue
+        terms.append(token)
+    return " OR ".join(terms)
 
 
 class HybridRetriever:
@@ -31,11 +95,17 @@ class HybridRetriever:
         evidence_validator: EvidenceValidator | None = None,
         settings: RagSettings | None = None,
         clock: Callable[[], datetime] | None = None,
+        retrieval_mode: RetrievalMode = "hybrid",
     ) -> None:
+        if retrieval_mode not in {"fts", "vector", "hybrid"}:
+            raise ValueError(f"지원하지 않는 retrieval mode입니다: {retrieval_mode}")
         self.settings = settings or RagSettings()
         self.settings.validate()
         self.connection_factory = connection_factory
-        self.embedding_provider = embedding_provider or build_embedding_provider(self.settings)
+        self.retrieval_mode = retrieval_mode
+        self.embedding_provider = embedding_provider
+        if self.embedding_provider is None and retrieval_mode != "fts":
+            self.embedding_provider = build_embedding_provider(self.settings)
         self.reranker = reranker
         if self.reranker is None and self.settings.reranker_enabled:
             self.reranker = (
@@ -152,21 +222,24 @@ class HybridRetriever:
     def _fts_candidates(
         self, conn, request: KnowledgeSearchRequest, effective_at: datetime
     ) -> list[dict[str, Any]]:
+        lexical_query = build_fts_websearch_query(request.query)
+        if not lexical_query:
+            return []
         filters, params = self._filters(request, effective_at)
         query = (
             self._base_select()
             + f"""
             WHERE c.chunk_level = 'child'
-              AND c.search_vector @@ plainto_tsquery('simple', %s)
+              AND c.search_vector @@ websearch_to_tsquery('simple', %s)
               AND {filters}
-            ORDER BY ts_rank_cd(c.search_vector, plainto_tsquery('simple', %s), 32) DESC,
+            ORDER BY ts_rank_cd(c.search_vector, websearch_to_tsquery('simple', %s), 32) DESC,
                      c.chunk_id
             LIMIT %s
         """
         )
         return conn.execute(
             query,
-            [request.query, *params, request.query, self.settings.candidate_limit],
+            [lexical_query, *params, lexical_query, self.settings.candidate_limit],
         ).fetchall()
 
     def _vector_candidates(
@@ -301,6 +374,13 @@ class HybridRetriever:
             if not self.settings.reranker_fallback_to_rrf:
                 raise
             return rows, type(exc).__name__
+
+    def _limit_reranker_candidates(
+        self, rows: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        if self.reranker is None:
+            return rows
+        return rows[: self.settings.reranker_candidate_limit]
 
     @staticmethod
     def _resolve_policy_priority(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -457,16 +537,32 @@ class HybridRetriever:
                 },
             )
 
-        query_embedding = self.embedding_provider.embed_query(request.query)
-        if len(query_embedding) != self.settings.embedding_dimensions:
-            raise ValueError("질문 embedding 차원이 DB 설정과 다릅니다.")
+        query_embedding = None
+        if self.retrieval_mode in {"vector", "hybrid"}:
+            if self.embedding_provider is None:
+                raise RuntimeError("Vector 검색에 embedding provider가 필요합니다.")
+            query_embedding = self.embedding_provider.embed_query(request.query)
+            if len(query_embedding) != self.settings.embedding_dimensions:
+                raise ValueError("질문 embedding 차원이 DB 설정과 다릅니다.")
 
         with self.connection_factory() as conn:
-            fts_rows = self._fts_candidates(conn, request, effective_at)
-            vector_rows = self._vector_candidates(
-                conn, request, effective_at, query_embedding
+            fts_rows = (
+                self._fts_candidates(conn, request, effective_at)
+                if self.retrieval_mode in {"fts", "hybrid"}
+                else []
+            )
+            vector_rows = (
+                self._vector_candidates(
+                    conn, request, effective_at, query_embedding
+                )
+                if self.retrieval_mode in {"vector", "hybrid"}
+                and query_embedding is not None
+                else []
             )
             fused = self._fuse(fts_rows, vector_rows)
+            fused_candidate_count = len(fused)
+            fused = self._limit_reranker_candidates(fused)
+            reranker_candidate_count = len(fused) if self.reranker is not None else 0
             parents = self._load_parents(conn, fused)
             fused, reranker_error = self._rerank_with_fallback(
                 request.query, fused, parents
@@ -480,7 +576,13 @@ class HybridRetriever:
             parent = parents.get(row["parent_chunk_id"])
             if not parent:
                 continue
-            row["rule_key"] = parent.get("rule_key") or row.get("rule_key")
+            row["rule_key"] = (
+                parent.get("rule_key")
+                or row.get("rule_key")
+                or stable_policy_clause_key(
+                    row["policy_key"], parent["section_title"]
+                )
+            )
             row["rule_effect"] = parent.get("rule_effect") or row.get("rule_effect")
             sources.append(
                 KnowledgeSource(
@@ -563,9 +665,18 @@ class HybridRetriever:
             conflicts=conflicts,
             evidence_assessment=assessment,
             retrieval={
-                "sparse": "postgresql_fts_ts_rank_cd",
-                "dense": self.settings.embedding_model,
-                "fusion": "rrf",
+                "retrieval_mode": self.retrieval_mode,
+                "sparse": (
+                    "postgresql_fts_ts_rank_cd"
+                    if self.retrieval_mode in {"fts", "hybrid"}
+                    else None
+                ),
+                "dense": (
+                    self.settings.embedding_model
+                    if self.retrieval_mode in {"vector", "hybrid"}
+                    else None
+                ),
+                "fusion": "rrf" if self.retrieval_mode == "hybrid" else None,
                 "rrf_k": self.settings.rrf_k,
                 "reranker": (
                     {
@@ -598,5 +709,7 @@ class HybridRetriever:
                 },
                 "fts_candidates": len(fts_rows),
                 "vector_candidates": len(vector_rows),
+                "fused_candidates": fused_candidate_count,
+                "reranker_candidates": reranker_candidate_count,
             },
         )

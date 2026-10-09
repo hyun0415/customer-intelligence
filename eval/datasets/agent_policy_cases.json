@@ -1,0 +1,103 @@
+{
+  "schema_version": 1,
+  "dataset_version": "2026-10-09",
+  "description": "정책 검색과 리뷰·정책 결합 Agent Tool 회귀 세트",
+  "cases": [
+    {
+      "id": "R01",
+      "category": "리뷰+정책",
+      "question": "ASIN {valid_asin}에서 파손 불만이 반복될 때 재배송이 가능한가?",
+      "required_tools": ["get_review_patterns_tool", "search_internal_knowledge_tool"],
+      "forbidden_tools": ["search_product_tool"],
+      "expected_source_ids": ["sample_commerce_reshipment_policy"],
+      "expected_rule_keys": ["reshipment_policy:2"],
+      "expected_facts": ["무료 재배송은 1회로 제한"],
+      "expected_status": "ok",
+      "evaluation_focus": "리뷰 근거와 재배송 정책 근거 분리"
+    },
+    {
+      "id": "R02",
+      "category": "정책",
+      "question": "이미 보상 쿠폰을 받은 고객에게 추가 쿠폰 지급이 가능한가?",
+      "required_tools": ["search_internal_knowledge_tool"],
+      "forbidden_tools": ["get_review_patterns_tool"],
+      "expected_source_ids": ["sample_commerce_compensation_coupon_policy"],
+      "expected_rule_keys": ["compensation_coupon_policy:4"],
+      "expected_status": "ok",
+      "evaluation_focus": "보상과 프로모션 중복 정책 검색"
+    },
+    {
+      "id": "R03",
+      "category": "리뷰+정책",
+      "question": "ASIN {valid_asin}의 반복 불만은 escalation 대상인가?",
+      "required_tools": ["get_review_patterns_tool", "search_internal_knowledge_tool"],
+      "forbidden_tools": ["search_product_tool"],
+      "expected_source_ids": ["sample_commerce_escalation_policy"],
+      "expected_rule_keys": ["escalation_policy:2"],
+      "expected_status": "ok",
+      "evaluation_focus": "반복 불만과 CS SOP 결합"
+    },
+    {
+      "id": "R04",
+      "category": "근거 없음",
+      "question": "내부 정책에 없는 보상 기준을 알려줘.",
+      "required_tools": ["search_internal_knowledge_tool"],
+      "forbidden_tools": ["get_review_patterns_tool"],
+      "expected_status": "no_evidence",
+      "evaluation_focus": "근거 없음과 hallucination 방지"
+    },
+    {
+      "id": "R05",
+      "category": "정책 시점",
+      "question": "2026년 3월에 유효했던 재배송 정책을 알려줘.",
+      "required_tools": ["search_internal_knowledge_tool"],
+      "forbidden_tools": ["get_review_patterns_tool"],
+      "expected_status": "no_evidence",
+      "evaluation_focus": "effective_at과 정책 버전 정확성"
+    },
+    {
+      "id": "R06",
+      "category": "숫자 Hard Negative",
+      "question": "동일 상품의 유사 파손이 7일 동안 4건이면 품질팀 전달 기준을 충족하는가?",
+      "required_tools": ["search_internal_knowledge_tool"],
+      "forbidden_tools": ["get_review_patterns_tool"],
+      "expected_source_ids": ["sample_commerce_damaged_item_sop"],
+      "expected_rule_keys": ["damaged_item_sop:4"],
+      "expected_facts": ["7일 내 5건 이상"],
+      "expected_status": "ok",
+      "evaluation_focus": "기준보다 1건 적은 조건을 승인하지 않는지"
+    },
+    {
+      "id": "R07",
+      "category": "상품 범위",
+      "question": "ASIN {valid_asin}의 눈 자극 신고 처리 절차를 알려줘.",
+      "required_tools": ["search_internal_knowledge_tool"],
+      "forbidden_tools": ["search_product_tool"],
+      "expected_source_ids": ["sample_commerce_product_specific_cs_guide"],
+      "expected_rule_keys": ["product_specific_cs_guide:3"],
+      "expected_status": "ok",
+      "evaluation_focus": "parent_asin 상품 정책 범위"
+    },
+    {
+      "id": "R08",
+      "category": "관할 범위",
+      "question": "일본 관할의 파손 환불 규정을 알려줘.",
+      "required_tools": ["search_internal_knowledge_tool"],
+      "forbidden_tools": ["get_review_patterns_tool"],
+      "expected_status": "no_evidence",
+      "evaluation_focus": "KR 정책의 타 관할 노출 방지"
+    },
+    {
+      "id": "R09",
+      "category": "리뷰+정책",
+      "question": "ASIN {valid_asin}의 반복 누수 불만 빈도를 확인하고, 품질팀 전달 기준과 비교해줘.",
+      "required_tools": ["get_review_patterns_tool", "search_internal_knowledge_tool"],
+      "forbidden_tools": ["search_product_tool"],
+      "expected_source_ids": ["sample_commerce_leakage_claim_sop"],
+      "expected_rule_keys": ["leakage_claim_sop:4"],
+      "expected_facts": ["7일 내 5건 이상", "30일 내 10건 이상"],
+      "expected_status": "ok",
+      "evaluation_focus": "리뷰 표본 비율과 운영 임계치를 혼동하지 않는지"
+    }
+  ]
+}

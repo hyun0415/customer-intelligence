@@ -1,0 +1,13 @@
+{
+  "description": "Historical Agent Tool baseline calculated from evaluation_20260802_180357.json.",
+  "case_count": 15,
+  "tool_selection_accuracy": 1.0,
+  "tool_argument_case_count": 2,
+  "tool_argument_accuracy": 1.0,
+  "tool_micro_precision": 1.0,
+  "tool_micro_required_recall": 1.0,
+  "limitations": [
+    "Only two cases had explicit expected_args.",
+    "This is a small fixed regression set, not an estimate of production accuracy."
+  ]
+}

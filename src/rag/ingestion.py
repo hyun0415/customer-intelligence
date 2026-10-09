@@ -9,6 +9,7 @@ from .config import RagSettings
 from .embeddings import EmbeddingProvider, attach_embeddings, build_embedding_provider
 from .loaders import load_policy_document
 from .models import PolicyMetadata
+from .parsers import PolicyDocumentParser, build_policy_parser
 from .repository import RagRepository
 
 
@@ -84,14 +85,16 @@ class RagIngestionService:
         embedding_provider: EmbeddingProvider | None = None,
         chunker: ParentChildChunker | None = None,
         settings: RagSettings | None = None,
+        parser: PolicyDocumentParser | None = None,
     ) -> None:
         self.settings = settings or RagSettings()
         self.repository = repository or RagRepository(settings=self.settings)
         self.embedding_provider = embedding_provider or build_embedding_provider(self.settings)
         self.chunker = chunker or ParentChildChunker(self.settings)
+        self.parser = parser or build_policy_parser("simple")
 
     def ingest(self, path: str | Path, metadata: PolicyMetadata) -> int:
-        document = load_policy_document(path, metadata)
+        document = load_policy_document(path, metadata, parser=self.parser)
         chunks = self.chunker.chunk(document)
         chunks = attach_embeddings(
             chunks, self.embedding_provider, self.settings.embedding_dimensions
@@ -131,8 +134,35 @@ def main() -> None:
         description="Internal policy RAG manifest ingestion"
     )
     parser.add_argument("manifest", type=Path)
+    parser.add_argument(
+        "--parser",
+        choices=("simple", "docling"),
+        default="simple",
+        help="기본 simple parser 또는 선택형 Docling parser",
+    )
+    parser.add_argument(
+        "--docling-ocr",
+        action="store_true",
+        help="스캔 PDF처럼 텍스트 레이어가 없을 때만 OCR을 켭니다.",
+    )
+    parser.add_argument(
+        "--docling-table-structure",
+        action="store_true",
+        help="표 구조 복원이 필요한 문서에서만 사용합니다.",
+    )
+    parser.add_argument(
+        "--docling-timeout-seconds",
+        type=float,
+        default=120,
+    )
     args = parser.parse_args()
-    results = RagIngestionService().ingest_manifest(args.manifest)
+    document_parser = build_policy_parser(
+        args.parser,
+        enable_ocr=args.docling_ocr,
+        enable_table_structure=args.docling_table_structure,
+        document_timeout_seconds=args.docling_timeout_seconds,
+    )
+    results = RagIngestionService(parser=document_parser).ingest_manifest(args.manifest)
     for result in results:
         print(f"{result['source_id']}: version_id={result['document_version_id']}")
 

@@ -1,0 +1,180 @@
+{
+  "schema_version": 1,
+  "dataset_version": "2026-10-09",
+  "description": "정책 RAG 검색·재정렬·근거 판별 고정 회귀 세트",
+  "labeling_method": "합성 승인 정책의 source_id와 policy_key:clause_number를 원문 대조하여 수작업 라벨링",
+  "policy_scope": "data/rag/internal_policies synthetic approved policies",
+  "cases": [
+    {
+      "case_id": "RP01", "category": "normal", "evaluation_focus": "무료 재배송 횟수",
+      "question": "동일 주문의 동일 사고에 무료 재배송은 몇 회까지 가능한가?",
+      "collections": ["compensation_policy"], "expected_status": "ok",
+      "expected_source_ids": ["sample_commerce_reshipment_policy"],
+      "expected_rule_keys": ["reshipment_policy:2"],
+      "expected_facts": ["무료 재배송은 1회로 제한"]
+    },
+    {
+      "case_id": "RP02", "category": "normal", "evaluation_focus": "하자 환불 접수 기한",
+      "question": "상품 하자나 파손 환불은 수령 후 며칠 이내 접수해야 하나?",
+      "collections": ["compensation_policy"], "expected_status": "ok",
+      "expected_source_ids": ["sample_commerce_refund_policy"],
+      "expected_rule_keys": ["refund_policy:2"],
+      "expected_facts": ["수령 후 30일 이내"]
+    },
+    {
+      "case_id": "RP03", "category": "normal", "evaluation_focus": "쿠폰 유효기간",
+      "question": "서비스 회복 쿠폰은 발급일부터 얼마 동안 유효한가?",
+      "collections": ["compensation_policy"], "expected_status": "ok",
+      "expected_source_ids": ["sample_commerce_compensation_coupon_policy"],
+      "expected_rule_keys": ["compensation_coupon_policy:3"],
+      "expected_facts": ["발급일로부터 90일간 유효"]
+    },
+    {
+      "case_id": "RP04", "category": "normal", "evaluation_focus": "만료 쿠폰 재발급",
+      "question": "회사 귀책 환불 처리 중 기존 쿠폰이 만료되면 어떻게 처리하는가?",
+      "collections": ["promotion_policy"], "expected_status": "ok",
+      "expected_source_ids": ["sample_commerce_promotion_stack_policy"],
+      "expected_rule_keys": ["promotion_stack_policy:3"],
+      "expected_facts": ["동일 가치의 30일 유효 쿠폰을 재발급"]
+    },
+    {
+      "case_id": "RP05", "category": "normal", "evaluation_focus": "파손 증빙 요청 기한",
+      "question": "파손 상품을 접수하면 담당자는 필요한 사진을 언제까지 요청해야 하는가?",
+      "collections": ["cs_sop"], "expected_status": "ok",
+      "expected_source_ids": ["sample_commerce_damaged_item_sop"],
+      "expected_rule_keys": ["damaged_item_sop:2"],
+      "expected_facts": ["접수 후 72시간 이내"]
+    },
+    {
+      "case_id": "RP06", "category": "normal", "evaluation_focus": "누수 품질팀 임계치",
+      "question": "동일 상품의 유사 누수가 7일 안에 몇 건이면 품질팀에 전달하는가?",
+      "collections": ["cs_sop"], "expected_status": "ok",
+      "expected_source_ids": ["sample_commerce_leakage_claim_sop"],
+      "expected_rule_keys": ["leakage_claim_sop:4"],
+      "expected_facts": ["7일 내 5건 이상"]
+    },
+    {
+      "case_id": "RP07", "category": "safety", "evaluation_focus": "의료 언급 우선 절차",
+      "question": "고객이 입원과 의료 증상을 언급하면 어느 절차를 우선해야 하는가?",
+      "collections": ["cs_sop"], "expected_status": "ok",
+      "expected_source_ids": ["sample_commerce_escalation_policy"],
+      "expected_rule_keys": ["escalation_policy:1"],
+      "expected_facts": ["의료 증상, 부상 또는 입원 언급"]
+    },
+    {
+      "case_id": "RP08", "category": "normal", "evaluation_focus": "고위험 검토 신호",
+      "question": "90일 이내 보상 완료 클레임이 몇 건이면 고위험 검토 신호인가?",
+      "collections": ["cs_sop"], "expected_status": "ok",
+      "expected_source_ids": ["sample_commerce_high_risk_customer_policy"],
+      "expected_rule_keys": ["high_risk_customer_policy:2"],
+      "expected_facts": ["90일 내 보상 완료 클레임 3건 이상"]
+    },
+    {
+      "case_id": "RP09", "category": "product_scope", "evaluation_focus": "상품 전용 안전 가이드",
+      "question": "B00RWCDM4A 상품에서 눈 자극을 호소하면 어떻게 처리해야 하는가?",
+      "collections": ["product_operation_guides"], "parent_asin": "B00RWCDM4A", "expected_status": "ok",
+      "expected_source_ids": ["sample_commerce_product_specific_cs_guide"],
+      "expected_rule_keys": ["product_specific_cs_guide:3"],
+      "expected_facts": ["즉시 안전 담당자에게 escalation"]
+    },
+    {
+      "case_id": "RP10", "category": "normal", "evaluation_focus": "예외 승인 권한",
+      "question": "고객 제공 총가치가 15만원을 초과하는 정책 예외는 누가 승인하는가?",
+      "collections": ["exception_policy"], "expected_status": "ok",
+      "expected_source_ids": ["sample_commerce_exception_approval_policy"],
+      "expected_rule_keys": ["exception_approval_policy:2"],
+      "expected_facts": ["운영 책임자", "150,000원 초과"]
+    },
+    {
+      "case_id": "RP11", "category": "no_evidence", "evaluation_focus": "비현실적 정책 부재",
+      "question": "양자 순간이동 장치를 분실하면 1억원을 보상하는 정책이 있는가?",
+      "expected_status": "no_evidence"
+    },
+    {
+      "case_id": "RP12", "category": "numeric_hard_negative", "evaluation_focus": "검색 문서에 없는 거액 현금 보상",
+      "question": "배송 분실 시 1억원의 현금 보상이 승인되어 있는가?",
+      "collections": ["compensation_policy"], "expected_status": "no_evidence"
+    },
+    {
+      "case_id": "RP13", "category": "jurisdiction_scope", "evaluation_focus": "관할 필터",
+      "question": "일본 관할에서 파손 상품을 환불할 수 있는가?",
+      "jurisdiction": "JP", "expected_status": "no_evidence"
+    },
+    {
+      "case_id": "RP14", "category": "product_scope", "evaluation_focus": "존재하지 않는 상품 전용 가이드",
+      "question": "B00UNKNOWN 상품의 전용 CS 가이드를 알려줘.",
+      "collections": ["product_operation_guides"], "parent_asin": "B00UNKNOWN", "expected_status": "no_evidence"
+    },
+    {
+      "case_id": "RP15", "category": "paraphrase", "evaluation_focus": "정책 표현과 다른 재배송 질문",
+      "question": "같은 배송 사고 때문에 물건을 다시 보내주는 건 자동으로 몇 번까지인가?",
+      "collections": ["compensation_policy"], "expected_status": "ok",
+      "expected_source_ids": ["sample_commerce_reshipment_policy"],
+      "expected_rule_keys": ["reshipment_policy:5"],
+      "expected_facts": ["2회차 재배송", "자동 승인하지 않고"]
+    },
+    {
+      "case_id": "RP16", "category": "ambiguous_term", "evaluation_focus": "여러 정책의 15만원 기준 중 예외 승인 구분",
+      "question": "표준 기준을 벗어난 처리의 총가치가 15만원보다 크면 최종 결재자는 누구인가?",
+      "collections": ["exception_policy"], "expected_status": "ok",
+      "expected_source_ids": ["sample_commerce_exception_approval_policy"],
+      "expected_rule_keys": ["exception_approval_policy:2"],
+      "expected_facts": ["운영 책임자", "150,000원 초과"]
+    },
+    {
+      "case_id": "RP17", "category": "numeric_hard_negative", "evaluation_focus": "품질팀 임계치보다 1건 적은 조건",
+      "question": "동일 상품의 유사 파손이 7일 동안 4건이면 7일 기준의 품질팀 escalation 임계치를 충족하는가?",
+      "collections": ["cs_sop"], "expected_status": "ok",
+      "expected_source_ids": ["sample_commerce_damaged_item_sop"],
+      "expected_rule_keys": ["damaged_item_sop:4"],
+      "expected_facts": ["7일 내 5건 이상"]
+    },
+    {
+      "case_id": "RP18", "category": "numeric_hard_negative", "evaluation_focus": "틀린 쿠폰 유효기간 교정",
+      "question": "서비스 회복 쿠폰이 발급일부터 120일 동안 유효하다는 말이 맞는가?",
+      "collections": ["compensation_policy"], "expected_status": "ok",
+      "expected_source_ids": ["sample_commerce_compensation_coupon_policy"],
+      "expected_rule_keys": ["compensation_coupon_policy:3"],
+      "expected_facts": ["발급일로부터 90일간 유효"]
+    },
+    {
+      "case_id": "RP19", "category": "effective_date_scope", "evaluation_focus": "정책 시행 전 시점",
+      "question": "2026년 8월 31일에 적용되는 무료 재배송 횟수를 알려줘.",
+      "collections": ["compensation_policy"], "effective_at": "2026-08-31T00:00:00+09:00", "expected_status": "no_evidence"
+    },
+    {
+      "case_id": "RP20", "category": "department_scope", "evaluation_focus": "부서 범위 필터",
+      "question": "법무 부서에 적용되는 재배송 승인 기준을 알려줘.",
+      "collections": ["compensation_policy"], "department": "LEGAL", "expected_status": "no_evidence"
+    },
+    {
+      "case_id": "RP21", "category": "collection_scope", "evaluation_focus": "잘못 제한된 collection",
+      "question": "파손 상품 사진 제출 기한을 알려줘.",
+      "collections": ["promotion_policy"], "expected_status": "no_evidence"
+    },
+    {
+      "case_id": "RP22", "category": "paraphrase", "evaluation_focus": "안전 절차 의미 검색과 복수 유효 근거",
+      "question": "제품 사용 뒤 병원에 갔다고 하면 보상 협의보다 먼저 누구에게 넘겨야 하나?",
+      "collections": ["cs_sop"], "expected_status": "ok",
+      "accepted_evidence": [
+        {"source_id": "sample_commerce_escalation_policy", "rule_key": "escalation_policy:1"},
+        {"source_id": "sample_commerce_damaged_item_sop", "rule_key": "damaged_item_sop:5"},
+        {"source_id": "sample_commerce_leakage_claim_sop", "rule_key": "leakage_claim_sop:4"}
+      ],
+      "expected_facts": ["즉시 안전 담당자에게 escalation"]
+    },
+    {
+      "case_id": "RP23", "category": "ambiguous_term", "evaluation_focus": "여러 SOP의 72시간 중 누수 조항 구분",
+      "question": "용기 누수를 접수하면 담당자는 포장과 배송 라벨 사진을 언제까지 요청해야 하나?",
+      "collections": ["cs_sop"], "expected_status": "ok",
+      "expected_source_ids": ["sample_commerce_leakage_claim_sop"],
+      "expected_rule_keys": ["leakage_claim_sop:1"],
+      "expected_facts": ["접수 후 72시간 이내"]
+    },
+    {
+      "case_id": "RP24", "category": "no_evidence", "evaluation_focus": "정책에 없는 회원 등급 혜택",
+      "question": "다이아몬드 회원에게 매달 현금 50만원을 지급하는 승인 정책이 있는가?",
+      "expected_status": "no_evidence"
+    }
+  ]
+}

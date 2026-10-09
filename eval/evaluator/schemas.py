@@ -19,6 +19,15 @@ class NumericCheckResult(BaseModel):
     notes: list[str] = Field(default_factory=list)
 
 
+class PolicyCheckResult(BaseModel):
+    status_pass: bool = True
+    sources_pass: bool = True
+    rule_keys_pass: bool = True
+    facts_pass: bool = True
+    no_evidence_abstention_pass: bool = True
+    notes: list[str] = Field(default_factory=list)
+
+
 class RuleCheckResult(BaseModel):
     answer_present: bool
     tool_outputs_present: bool
@@ -26,6 +35,11 @@ class RuleCheckResult(BaseModel):
     expected_args_pass: bool
     missing_expected_args: list[str] = Field(default_factory=list)
     unsupported_numbers: list[str] = Field(default_factory=list)
+    policy_status_pass: bool = True
+    policy_sources_pass: bool = True
+    policy_rule_keys_pass: bool = True
+    policy_facts_pass: bool = True
+    no_evidence_abstention_pass: bool = True
     rule_notes: list[str] = Field(default_factory=list)
 
 

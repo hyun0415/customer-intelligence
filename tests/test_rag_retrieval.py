@@ -6,7 +6,7 @@ import pytest
 from src.rag.config import RagSettings
 from src.rag.models import EvidenceAssessment, KnowledgeSearchRequest, KnowledgeSource
 from src.rag.rerankers import BGEM3ColbertReranker, RemoteColbertReranker
-from src.rag.retriever import HybridRetriever
+from src.rag.retriever import HybridRetriever, build_fts_websearch_query
 
 NOW = datetime(2026, 9, 1, tzinfo=timezone.utc)
 
@@ -164,6 +164,30 @@ class CapturingConnection:
         return []
 
 
+def test_fts_query_uses_distinct_or_terms_for_korean_question():
+    assert build_fts_websearch_query(
+        "동일 주문의 무료 재배송은 몇 회까지 가능한가?"
+    ) == "동일 OR 주문 OR 무료 OR 재배송"
+
+
+def test_fts_query_normalizes_korean_particles_and_ten_thousand_won():
+    assert build_fts_websearch_query(
+        "표준 기준을 벗어난 처리의 총가치가 15만원보다 크면 누구인가?"
+    ) == "표준 OR 기준 OR 벗어난 OR 처리 OR 총가치 OR 150,000원 OR 크면"
+
+
+def test_fts_candidates_use_websearch_query_instead_of_all_term_plain_query():
+    instance = retriever()
+    conn = CapturingConnection()
+    request = KnowledgeSearchRequest(query="무료 재배송은 몇 회까지 가능한가?")
+
+    assert instance._fts_candidates(conn, request, NOW) == []
+    assert "websearch_to_tsquery('simple', %s)" in conn.query
+    assert "plainto_tsquery" not in conn.query
+    assert conn.params[0] == "무료 OR 재배송"
+    assert conn.params[-2] == conn.params[0]
+
+
 def test_vector_candidates_apply_minimum_relevance_similarity():
     instance = retriever()
     conn = CapturingConnection()
@@ -247,6 +271,24 @@ def test_reranker_failure_falls_back_to_rrf_order():
     assert error == "RuntimeError"
 
 
+def test_reranker_receives_only_top_rrf_candidates():
+    instance = HybridRetriever(
+        connection_factory=lambda: None,
+        embedding_provider=FakeEmbeddings(),
+        reranker=FixedReranker([0.1, 0.2]),
+        settings=RagSettings(
+            reranker_candidate_limit=2,
+            evidence_validation_enabled=False,
+        ),
+    )
+    rows = [
+        {"parent_chunk_id": index, "rrf_score": 1.0 / index}
+        for index in range(1, 5)
+    ]
+
+    assert instance._limit_reranker_candidates(rows) == rows[:2]
+
+
 def test_bge_m3_reranker_uses_only_colbert_mode():
     class FakeBGEModel:
         def __init__(self):
@@ -281,6 +323,8 @@ def test_remote_reranker_posts_candidates_and_returns_scores():
     def opener(request, timeout):
         assert request.full_url == "http://reranker.test/rerank"
         assert timeout == 7
+        assert request.get_header("Authorization") is None
+        assert request.get_header("Ngrok-skip-browser-warning") == "true"
         assert json.loads(request.data.decode("utf-8")) == {
             "query": "무료 재배송 횟수",
             "passages": ["1회", "관리자 승인"],
@@ -290,6 +334,7 @@ def test_remote_reranker_posts_candidates_and_returns_scores():
     reranker = RemoteColbertReranker(
         RagSettings(
             reranker_base_url="http://reranker.test",
+            reranker_api_key="",
             reranker_timeout_seconds=7,
         ),
         opener=opener,
@@ -299,6 +344,35 @@ def test_remote_reranker_posts_candidates_and_returns_scores():
         0.82,
         0.31,
     ]
+
+
+def test_remote_reranker_sends_optional_bearer_token():
+    class TokenResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return json.dumps({"scores": [0.7]}).encode("utf-8")
+
+    def opener(request, timeout):
+        assert timeout == 7
+        assert request.get_header("Authorization") == "Bearer secret-token"
+        assert request.get_header("Ngrok-skip-browser-warning") == "true"
+        return TokenResponse()
+
+    reranker = RemoteColbertReranker(
+        RagSettings(
+            reranker_base_url="https://colab.example",
+            reranker_api_key="secret-token",
+            reranker_timeout_seconds=7,
+        ),
+        opener=opener,
+    )
+
+    assert reranker.score("질문", ["근거"]) == [0.7]
 
 
 def test_hybrid_retriever_selects_remote_reranker_when_url_is_set():
@@ -389,3 +463,21 @@ def test_empty_access_grants_return_no_evidence_without_external_calls():
     assert response.sources == []
     assert response.retrieval["access_control"] == "denied_empty_grants"
     assert response.retrieval["external_calls_skipped"] is True
+
+
+def test_fts_only_mode_does_not_build_or_call_embeddings(monkeypatch):
+    def fail_to_build(_settings):
+        raise AssertionError("FTS-only ablation must not build embeddings")
+
+    monkeypatch.setattr("src.rag.retriever.build_embedding_provider", fail_to_build)
+    instance = HybridRetriever(
+        connection_factory=lambda: None,
+        retrieval_mode="fts",
+        settings=RagSettings(
+            reranker_enabled=False,
+            evidence_validation_enabled=False,
+        ),
+    )
+
+    assert instance.embedding_provider is None
+    assert instance.retrieval_mode == "fts"

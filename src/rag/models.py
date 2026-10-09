@@ -1,3 +1,4 @@
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal
@@ -7,6 +8,15 @@ from pydantic import BaseModel, Field, field_validator
 from src.auth.access import PolicyAccessGrant
 
 from .config import ALL_DEPARTMENTS, ALL_JURISDICTIONS, DEFAULT_COLLECTIONS
+
+
+def stable_policy_clause_key(policy_key: str, section_title: str) -> str:
+    """Build a parser-independent identifier from a policy and clause number."""
+    match = re.match(r"^\s*(\d+(?:\.\d+)*)", section_title)
+    if match:
+        return f"{policy_key}:{match.group(1)}"
+    normalized = re.sub(r"[^0-9A-Za-z가-힣]+", "-", section_title).strip("-")
+    return f"{policy_key}:{normalized.lower()}"
 
 
 class PolicyMetadata(BaseModel):
@@ -54,6 +64,18 @@ class LoadedPolicyDocument(BaseModel):
     metadata: PolicyMetadata
     raw_content: str
     cleaned_content: str
+    parser_name: str = "simple"
+    elements: list["PolicyDocumentElement"] = Field(default_factory=list)
+
+
+class PolicyDocumentElement(BaseModel):
+    element_type: str
+    text: str
+    section_path: str = ""
+    section_title: str = ""
+    heading_level: int | None = Field(default=None, ge=1, le=6)
+    page_number: int | None = Field(default=None, ge=1)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class ChunkDraft(BaseModel):
