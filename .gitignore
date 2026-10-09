@@ -18,6 +18,8 @@ node_modules/
 
 # 평가 및 임시 파일
 *.log
+*.xls
+*.xlsx
 
 # IDE
 .vscode/
@@ -35,6 +37,12 @@ eval/results/
 data/rag/raw/
 .codex-build/
 .codex-finalizer/
+.presentation-build-*/
+.codex-ppt/
+artifacts/
+output/
+tmp/
+rider-guard-mvp/
 
 # Terraform local state and generated plans
 **/.terraform/

@@ -1,0 +1,8 @@
+evaluation,stage,cases,recall_at_k,mrr,no_evidence_f1,status_accuracy,p95_latency_ms,tool_selection_accuracy,tool_argument_accuracy,authorized_recall_at_k,denial_accuracy,access_violations
+rag,fts_only,24,1.000,0.865,0.667,0.833,67.4,,,,,
+rag,vector_only,24,0.875,0.812,0.714,0.833,68.7,,,,,
+rag,hybrid_rrf,24,1.000,0.896,0.667,0.833,115.9,,,,,
+rag,hybrid_rrf_bge_m3,24,1.000,0.969,0.667,0.833,736.5,,,,,
+rag,full,24,1.000,0.969,1.000,1.000,5703.3,,,,,
+agent_tools,all,24,,,,,,1.000,1.000,,,
+policy_access,vector,11,,,,,1405.2,,,1.000,1.000,0

@@ -107,7 +107,8 @@ final Parent `K=5`. A separate 11-case access evaluation reported 1.000
 authorized Recall@5, 1.000 denial accuracy, and zero out-of-scope exposures.
 Because this is a small synthetic policy set, these numbers are not an estimate
 of accuracy for arbitrary questions. The [evaluation guide](eval/README_EN.md)
-documents the intent, gold data, and reproduction steps.
+documents the intent, gold data, and reproduction steps. A compact public
+snapshot is available in the [evaluation results summary](docs/results/README_EN.md).
 
 ## Quick Start
 
