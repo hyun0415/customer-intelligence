@@ -28,9 +28,13 @@
 상품 리뷰에서 반복 불만과 원문 근거를 찾고, 꼬리질문으로 개선 우선순위를 정한 뒤,
 승인된 정책을 검색하거나 근거가 없을 때 답변을 보류하는 전체 흐름을 보여줍니다.
 
+https://github.com/user-attachments/assets/b1d961ff-0d1c-4d03-bbd5-4e9db9d33761
+
 <p align="center">
-  <a href="docs/demo/customer-intelligence-demo-ko.mp4"><strong>▶ 한국어 시연 영상 보기 (4분 33초)</strong></a><br>
-  <sub><a href="docs/demo/customer-intelligence-demo-ko.srt">한국어 자막 파일</a></sub>
+  <sub>
+    <a href="docs/demo/customer-intelligence-demo-ko.mp4">전체 시연 영상 보기 (4분 33초)</a> ·
+    <a href="docs/demo/customer-intelligence-demo-ko.srt">한국어 자막</a>
+  </sub>
 </p>
 
 > **구현 범위** — Amazon Reviews 2023 Beauty and Personal Care의 샴푸 상품
