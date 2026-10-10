@@ -42,6 +42,7 @@ data/rag/raw/
 artifacts/
 output/
 tmp/
+.tmp-video-edit/
 rider-guard-mvp/
 
 # Terraform local state and generated plans

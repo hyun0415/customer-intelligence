@@ -15,14 +15,13 @@
 </p>
 
 <p align="center">
+  <a href="#product-walkthrough">Walkthrough</a> ·
   <a href="#problem-and-design">Problem &amp; Design</a> ·
   <a href="#system-flows">System Flows</a> ·
   <a href="#evaluation-results">Evaluation</a> ·
   <a href="#quick-start">Quick Start</a> ·
   <a href="README.md">한국어</a>
 </p>
-
-![Service screen that cites policy evidence and abstains when evidence is insufficient](docs/assets/screenshots/policy-grounding-and-no-evidence.png)
 
 > **Scope** — The analysis dataset contains 547 shampoo products and 105,060
 > reviews from the Beauty and Personal Care category of Amazon Reviews 2023.
@@ -70,15 +69,59 @@ the evidence as `sufficient`, `insufficient`, or `conflict`.
 The [Policy RAG guide](docs/rag/README_EN.md) explains Child and Parent roles,
 RRF, BGE-M3 MaxSim, policy priority, and failure behavior.
 
-## What the User Sees
+## Product Walkthrough
 
-| Review metrics and interpretation boundaries | Recurring complaints with source evidence |
-|---|---|
-| ![Rating distribution and customer response](docs/assets/screenshots/product-review-summary.png) | ![Recurring complaint aspects](docs/assets/screenshots/aspect-pattern-evidence.png) |
+The questions below are entered in English. The current demo is configured to
+answer in Korean, so each caption explains the verified behavior in English.
 
-Review-pattern ratios are explicitly presented as ratios within the selected
-sample, not population incidence. When policy evidence is insufficient, the
-system returns `no_evidence` instead of inventing a rule.
+### 1. From review evidence to an action priority
+
+**Question:** What are the most common complaints in highly helpful reviews
+rated three stars or lower?
+
+![Complaint frequencies calculated from a selected low-rating review sample](docs/assets/screenshots/demo-review-analysis.png)
+
+The system queries a clearly defined review sample, extracts recurring complaint
+aspects, and reports counts and sample-level ratios without presenting them as
+population incidence.
+
+<details>
+<summary><strong>Follow-up: turn the pattern into a product priority</strong></summary>
+
+![A multi-turn follow-up recommends the first issue to address and cites the supporting review evidence](docs/assets/screenshots/demo-review-priority.png)
+
+The follow-up keeps the product context and recommends color staining first,
+while stating the sample boundary and the review evidence behind the decision.
+
+</details>
+
+### 2. From policy evidence to a safe answer
+
+**Question:** How many free reshipments are allowed for the same incident on the
+same order?
+
+![A policy answer that cites the applicable reshipment rule and source section](docs/assets/screenshots/demo-policy-grounded-answer.png)
+
+The answer identifies the one-reshipment rule and exposes the policy title,
+version, section, scope, and source identifier used as evidence.
+
+**Hard negative:** Is KRW 100 million in cash compensation approved for a lost
+delivery?
+
+![The assistant declines to approve an unsupported compensation claim](docs/assets/screenshots/demo-policy-no-evidence.png)
+
+No approved policy supports the requested amount or payment method, so the
+system returns insufficient evidence instead of inventing an authorization.
+
+<details>
+<summary><strong>Supporting view: source review dashboard</strong></summary>
+
+![The dashboard displays the highly helpful low-rating reviews used as source evidence](docs/assets/screenshots/demo-review-evidence-dashboard.png)
+
+The dashboard keeps the underlying review text visible so an analyst can inspect
+the evidence used by the conversational analysis.
+
+</details>
 
 ## Evaluation Results
 

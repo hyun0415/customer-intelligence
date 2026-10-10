@@ -15,6 +15,7 @@
 </p>
 
 <p align="center">
+  <a href="#시연-영상">시연 영상</a> ·
   <a href="#문제와-설계">문제와 설계</a> ·
   <a href="#시스템-흐름">시스템 흐름</a> ·
   <a href="#평가-결과">평가 결과</a> ·
@@ -22,7 +23,15 @@
   <a href="README_EN.md">English</a>
 </p>
 
-![정책 근거를 제시하고 근거가 부족하면 답변을 보류하는 서비스 화면](docs/assets/screenshots/policy-grounding-and-no-evidence.png)
+## 시연 영상
+
+상품 리뷰에서 반복 불만과 원문 근거를 찾고, 꼬리질문으로 개선 우선순위를 정한 뒤,
+승인된 정책을 검색하거나 근거가 없을 때 답변을 보류하는 전체 흐름을 보여줍니다.
+
+<p align="center">
+  <a href="docs/demo/customer-intelligence-demo-ko.mp4"><strong>▶ 한국어 시연 영상 보기 (4분 33초)</strong></a><br>
+  <sub><a href="docs/demo/customer-intelligence-demo-ko.srt">한국어 자막 파일</a></sub>
+</p>
 
 > **구현 범위** — Amazon Reviews 2023 Beauty and Personal Care의 샴푸 상품
 > 547개와 리뷰 105,060건을 분석 대상으로 구성했습니다. 저장소의 정책은 실제 회사
@@ -66,14 +75,11 @@ Redis 캐시와 리뷰별 호출의 비용·정확도 trade-off를 확인할 수
 [정책 RAG 문서](docs/rag/README.md)에서 Child·Parent 역할, RRF, BGE-M3 MaxSim,
 정책 우선순위와 실패 처리를 확인할 수 있습니다.
 
-## 서비스에서 보이는 결과
+## 시연에서 확인할 수 있는 결과
 
-| 리뷰 통계와 해석 범위 | 반복 불만과 원문 근거 |
-|---|---|
-| ![평점 분포와 고객 반응](docs/assets/screenshots/product-review-summary.png) | ![반복 불만 유형](docs/assets/screenshots/aspect-pattern-evidence.png) |
-
-리뷰 패턴 비율은 선택된 표본 안의 비율로 표시하며 전체 고객 발생률로 확대하지
-않습니다. 정책 근거가 부족하면 내용을 추측하지 않고 `no_evidence`로 종료합니다.
+리뷰 분석은 선택된 표본의 반복 불만과 실제 언급 문장을 함께 보여주며, 표본 비율을
+전체 고객 발생률로 확대하지 않습니다. 정책 답변은 적용 가능한 조항을 출처와 함께
+제시하고, 근거가 부족하면 내용을 추측하지 않고 `no_evidence`로 종료합니다.
 
 ## 평가 결과
 
