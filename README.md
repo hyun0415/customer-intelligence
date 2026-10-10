@@ -28,7 +28,7 @@
 상품 리뷰에서 반복 불만과 원문 근거를 찾고, 꼬리질문으로 개선 우선순위를 정한 뒤,
 승인된 정책을 검색하거나 근거가 없을 때 답변을 보류하는 전체 흐름을 보여줍니다.
 
-https://github.com/user-attachments/assets/b1d961ff-0d1c-4d03-bbd5-4e9db9d33761
+https://github.com/user-attachments/assets/d459e612-e743-4946-9406-4c99570e58e6
 
 <p align="center">
   <sub>
