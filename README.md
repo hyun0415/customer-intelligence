@@ -139,6 +139,11 @@ Agent와 전체 RAG 평가는 PostgreSQL 데이터와 OpenAI API 설정이 필�
 비용이 발생하는 검증과 로컬 모델 실행은 [실행과 배포 문서](deploy/README.md)와
 [평가 안내](eval/README.md)에 분리했습니다.
 
+Amazon 리뷰 분석 데이터를 처음부터 만들고 PostgreSQL에 적재하려면
+[데이터 재현 안내](docs/data_reproduction.md)를 따릅니다. 원본 데이터는 저장소에
+포함하지 않으며, 필터 노트북과 동일한 로직의 실행 스크립트로 상품 547개와 리뷰
+105,060개를 재현합니다.
+
 ## 기술 구성
 
 | 영역 | 기술 |
@@ -191,7 +196,9 @@ customer-intelligence/
 │  ├─ auth/                 # 인증, 세션과 접근 제어
 │  └─ cache/                # Redis 기반 리뷰 분석 캐시
 ├─ db/                      # PostgreSQL 스키마와 초기화 SQL
-├─ data/                    # 합성 정책과 평가 입력 데이터
+├─ data/                    # 합성 정책과 로컬 전용 Amazon 리뷰 데이터
+├─ notebooks/               # 데이터 필터링과 Colab 검증 노트북
+├─ scripts/                 # 데이터 생성과 PostgreSQL 적재 스크립트
 ├─ eval/                    # Agent, RAG와 LLM Judge 평가
 ├─ tests/                   # Tool, 분석, 권한과 회귀 테스트
 ├─ deploy/                  # Docker Compose와 AWS 배포 스크립트
@@ -208,6 +215,7 @@ customer-intelligence/
 | [고객 리뷰 분석](docs/review-analysis/README.md) | SQL 표본, Aspect Extraction, 원문 검증, 집계와 Redis 캐시 |
 | [정책 RAG](docs/rag/README.md) | Ingestion, Child·Parent 검색, RRF, BGE-M3와 근거 판정 |
 | [평가](eval/README.md) | Agent·Tool·RAG 평가 목적, 실행 명령과 결과 파일 |
+| [데이터 재현](docs/data_reproduction.md) | Amazon 원본, 필터 기준, Parquet 생성과 DB 적재 |
 | [실행과 배포](deploy/README.md) | 로컬 Compose, ECR 이미지 게시와 EC2 배포 |
 | [Terraform](infra/terraform/README.md) | 비용 안전 기본값, EC2 생성, SSM 접속과 종료 |
 | [Web 구조](docs/web_architecture.md) | Next.js, FastAPI, OIDC, 세션과 RBAC 경계 |
@@ -218,6 +226,10 @@ customer-intelligence/
 
 Amazon Reviews 2023 원본 전체는 저장소에 재배포하지 않습니다. 실제 `.env`, OAuth
 Secret, API Key, DB 내용과 Terraform state도 Git에 포함하지 않습니다.
+
+분석 데이터의 선정 근거와 재현 절차는 [데이터 재현 안내](docs/data_reproduction.md)에
+공개했습니다. `analyzed_asin`은 필터 결과를 추적하는 열이며, 애플리케이션 DB는 기존
+`parent_asin`을 상품 키로 사용합니다.
 
 OpenAI 기반 Web·Agent·정책 검색과 주요 평가 경로를 구현했습니다. AWS L40S에서
 Qwen3와 GPT-OSS의 대표 상품 분석 경로, BGE-M3 재정렬 API를 검증했습니다. 로컬 모델

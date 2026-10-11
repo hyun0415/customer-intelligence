@@ -8,7 +8,6 @@ import psycopg
 from dotenv import load_dotenv
 from psycopg.types.json import Jsonb
 
-
 BASE_DIR = Path(__file__).resolve().parent.parent
 PRODUCTS_PATH = BASE_DIR / "data" / "products_rds.parquet"
 REVIEWS_PATH = BASE_DIR / "data" / "reviews_rds.parquet"
@@ -66,18 +65,17 @@ def connect():
 def load_products(conn, products):
     sql = """
         COPY products (
-            parent_asin, analyzed_asin, title, store, rating_number, average_rating,
+            parent_asin, title, store, rating_number, average_rating,
             features, description, details, price, review_count,
             negative_count, verified_count, min_review_at, max_review_at
         ) FROM STDIN
     """
 
-    with conn.cursor() as cur:
-        with cur.copy(sql) as copy:
-            for row in products.itertuples(index=False):
-                copy.write_row((
+    with conn.cursor() as cur, cur.copy(sql) as copy:
+        for row in products.itertuples(index=False):
+            copy.write_row(
+                (
                     row.parent_asin,
-                    row.analyzed_asin,
                     row.title,
                     null_to_none(row.store),
                     int(row.rating_number),
@@ -91,7 +89,8 @@ def load_products(conn, products):
                     int(row.verified_count),
                     to_datetime(row.min_timestamp),
                     to_datetime(row.max_timestamp),
-                ))
+                )
+            )
 
     print(f"products 적재 완료: {len(products):,}건")
 
@@ -104,10 +103,10 @@ def load_reviews(conn, reviews):
         ) FROM STDIN
     """
 
-    with conn.cursor() as cur:
-        with cur.copy(sql) as copy:
-            for row in reviews.itertuples(index=False):
-                copy.write_row((
+    with conn.cursor() as cur, cur.copy(sql) as copy:
+        for row in reviews.itertuples(index=False):
+            copy.write_row(
+                (
                     row.parent_asin,
                     null_to_none(row.asin),
                     null_to_none(row.user_id),
@@ -117,7 +116,8 @@ def load_reviews(conn, reviews):
                     to_datetime(row.timestamp),
                     int(row.helpful_vote),
                     bool(row.verified_purchase),
-                ))
+                )
+            )
 
     print(f"reviews 적재 완료: {len(reviews):,}건")
 

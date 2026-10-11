@@ -179,6 +179,11 @@ Detailed options, paid validation paths, and local-model commands are separated
 into the [run and deployment guide](deploy/README_EN.md) and the
 [evaluation guide](eval/README_EN.md).
 
+To rebuild the Amazon review analysis data and load it into PostgreSQL, follow
+the [data reproduction guide](docs/data_reproduction_EN.md). The source files
+are not committed; the notebook-equivalent script reproduces the documented
+547 products and 105,060 reviews.
+
 ## Technology
 
 | Area | Technology |
@@ -232,7 +237,9 @@ customer-intelligence/
 │  ├─ auth/                 # Authentication, sessions, and access control
 │  └─ cache/                # Redis-backed review-analysis cache
 ├─ db/                      # PostgreSQL schema and initialization SQL
-├─ data/                    # Synthetic policies and evaluation inputs
+├─ data/                    # Synthetic policies and local-only Amazon review data
+├─ notebooks/               # Data filtering and Colab validation notebooks
+├─ scripts/                 # Dataset generation and PostgreSQL loading
 ├─ eval/                    # Agent, RAG, and LLM-judge evaluation
 ├─ tests/                   # Tool, analysis, authorization, and regression tests
 ├─ deploy/                  # Docker Compose and AWS deployment scripts
@@ -249,6 +256,7 @@ customer-intelligence/
 | [Customer review analysis](docs/review-analysis/README_EN.md) | SQL sampling, Aspect Extraction, source validation, aggregation, and Redis caching |
 | [Policy RAG](docs/rag/README_EN.md) | Ingestion, Child and Parent retrieval, RRF, BGE-M3, and evidence assessment |
 | [Evaluation](eval/README_EN.md) | Agent, Tool, and RAG evaluation intent, commands, and result files |
+| [Data reproduction](docs/data_reproduction_EN.md) | Amazon source, filters, Parquet generation, and DB loading |
 | [Run and deploy](deploy/README_EN.md) | Local Compose, ECR image publishing, and EC2 deployment |
 | [Terraform](infra/terraform/README_EN.md) | Cost-safe defaults, EC2 provisioning, SSM access, and teardown |
 | [Web architecture](docs/web_architecture.md) | Next.js, FastAPI, OIDC, sessions, and RBAC boundaries |
@@ -260,6 +268,11 @@ customer-intelligence/
 The full Amazon Reviews 2023 corpus is not redistributed in this repository.
 Real `.env` files, OAuth secrets, API keys, database contents, and Terraform
 state are also excluded from Git.
+
+The [data reproduction guide](docs/data_reproduction_EN.md) documents the
+selection rationale and commands. `analyzed_asin` is retained for filtering
+traceability, while the application database continues to use `parent_asin` as
+the product key.
 
 The OpenAI Web, Agent, policy retrieval, and primary evaluation paths are
 implemented. Representative Qwen3 and GPT-OSS product-analysis paths and the
