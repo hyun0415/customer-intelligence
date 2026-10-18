@@ -125,29 +125,99 @@ the evidence used by the conversational analysis.
 
 ## Evaluation Results
 
-The same 24 policy questions were run through each retrieval stage to measure
-how often the correct policy was found and how its rank changed. The final stage
-also checked whether the retrieved document directly answered the question.
+Evaluation separates the RAG engine from the Agent that operates it. First, 24
+fixed policy questions are sent directly to the Retriever, without the Agent,
+to compare FTS, Vector, RRF, BGE-M3, and evidence assessment under the same
+conditions. Then nine user-facing policy questions are sent through the Agent
+to test whether it selects the right Tools and constructs the correct query and
+product, department, and jurisdiction filters.
+
+| Evaluation set | Question being tested | Agent involved | Primary metrics |
+|---|---|---|---|
+| 24-case RAG pipeline | Can the retrieval engine find the correct policy and exact clause? | No | Recall@5, MRR, expected-clause Parent Hit, status accuracy, latency |
+| 9-case policy Agent | Can the Agent operate RAG with the correct Tool and arguments? | Yes | Tool execution, policy status, source, clause, facts, answer grounding |
+
+This separation distinguishes retrieval failures from failures caused by an
+incorrect Agent-generated search request. The final retrieval unit is a Parent
+Chunk. Whether it contains the expected clause is evaluated with the Parent's
+stable `source_id + rule_key` pair rather than a database Chunk ID that can
+change after re-ingestion.
 
 ![Automated evaluation and model-role transition flow](docs/assets/diagrams/evaluation-model-optimization-flow-en.png)
 
-| Pipeline | Recall@K | MRR | No-evidence F1 | p95 Latency |
-|---|---:|---:|---:|---:|
-| FTS Only | **1.000** | 0.865 | 0.667 | **67.4 ms** |
-| Vector Only | 0.875 | 0.812 | 0.714 | 68.7 ms |
-| Hybrid RRF | **1.000** | 0.896 | 0.667 | 115.9 ms |
-| Hybrid RRF + BGE-M3 | **1.000** | **0.969** | 0.667 | 736.5 ms |
-| Full pipeline + evidence assessment | **1.000** | **0.969** | **1.000** | 5,703.3 ms |
+| Pipeline | Source Recall@5 | Source MRR | Expected-clause Parent Hit@5 | Expected-clause Parent MRR | Status accuracy | No-evidence F1 | p95 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| FTS Only | **1.000** | 0.865 | 0.875 | 0.708 | 0.833 | 0.667 | 94.3 ms |
+| Vector Only | 0.875 | 0.812 | 0.875 | 0.812 | 0.833 | 0.714 | **76.5 ms** |
+| Hybrid RRF | **1.000** | 0.896 | **1.000** | 0.896 | 0.833 | 0.667 | 116.8 ms |
+| Hybrid RRF + BGE-M3 | **1.000** | 0.969 | **1.000** | 0.880 | 0.833 | 0.667 | 1,139.9 ms |
+| Full pipeline + evidence assessment | **1.000** | **1.000** | **1.000** | **0.969** | **1.000** | **1.000** | 5,195.6 ms |
 
-| Why the result changes | Observed effect |
-|---|---|
-| FTS and Vector | Retrieve candidates quickly but do not determine whether a related document answers the question |
-| Hybrid RRF + BGE-M3 | Combine exact terminology with semantic search and promote the closest clause, improving MRR |
-| Full pipeline | Remove candidates that cannot support an answer and correctly separate `no_evidence` cases |
+### Ablation Findings
 
-Every stage used the same limit of ten candidates per retrieval channel and a
-final Parent `K=5`. A separate 11-case access evaluation reported 1.000
-authorized Recall@5, 1.000 denial accuracy, and zero out-of-scope exposures.
+- **FTS Only:** performed well when questions repeated exact policy terms and
+  numbers. It found every policy document, but ranked the correct clause less
+  reliably (Parent MRR 0.708).
+
+- **Vector Only:** improved clause ranking for paraphrased questions (MRR
+  0.812), but missed some exact-number and policy-term cases, reducing Source
+  Recall@5 to 0.875.
+
+- **Hybrid RRF:** found every target policy and clause, with clause MRR rising
+  to 0.896. Keyword and semantic retrieval compensated for each other's misses.
+
+- **Hybrid RRF + BGE-M3:** improved target-policy ranking (Source MRR 0.969),
+  while clause MRR dipped to 0.880. A similar clause from the same policy
+  occasionally ranked above the labeled clause, so reranking did not improve
+  every metric.
+
+- **Full pipeline:** checked whether retrieved evidence directly answered the
+  question, raising accuracy and No-evidence F1 to 1.000. The p95 latency rose
+  from 1.14 seconds to 5.20 seconds, showing the trade-off between reliability
+  and response time.
+
+Overall, **Hybrid RRF worked best for candidate retrieval**, **BGE-M3 improved
+target-policy ordering**, and the **full pipeline best blocked unsupported
+answers**. Latency excludes the shared query-embedding step for a fair stage
+comparison.
+
+Across the nine policy Agent cases, every required Tool was selected and
+executed, with no BGE-M3 or evidence-assessment runtime errors. However, only
+five expected policy statuses and six expected sources and clauses matched.
+These failures expose Agent orchestration issues rather than a retrieval-engine
+failure: for example, the Agent passed the natural-language department name
+`품질팀` instead of the stored value `CS`, or rewrote a query too broadly.
+
+| Policy Agent evaluation | Result |
+|---|---:|
+| Tool selection and execution | **9/9** |
+| BGE-M3 / evidence-assessment errors | **0/9 / 0/9** |
+| Expected policy status matched | 5/9 |
+| Expected policy source / clause present | 6/9 / 6/9 |
+| Expected facts present | 7/9 |
+| Correct abstention after `no_evidence` | **9/9** |
+| Average GPT-5.6 Sol evaluation | 4.56/5 |
+
+- **Direct retrieval vs. Agent:** the 24 fixed-condition cases found every
+  target clause, while the nine Agent cases lost accuracy when questions were
+  converted into search conditions.
+
+- **Main failure causes:** two cases used a department name that did not match
+  the database value, and one broadened the question enough to retrieve weakly
+  related evidence.
+
+- **Evaluation rule to refine:** for a question about a nonexistent
+  compensation rule, the Agent did not invent an answer but displayed related
+  policies. The evaluation should distinguish this safe response from a wrong
+  answer.
+
+- **Next experiment:** standardize department and jurisdiction values before
+  retrieval, limit query rewriting, and rerun the same nine cases.
+
+Every stage in the 24-case RAG evaluation used the same limit of ten candidates
+per retrieval channel and a final Parent `K=5`. A separate 11-case access
+evaluation reported 1.000 authorized Recall@5, 1.000 denial accuracy, and zero
+out-of-scope exposures.
 Because this is a small synthetic policy set, these numbers are not an estimate
 of accuracy for arbitrary questions. The [evaluation guide](eval/README_EN.md)
 documents the intent, gold data, and reproduction steps. A compact public

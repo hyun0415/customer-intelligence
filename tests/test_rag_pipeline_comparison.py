@@ -17,7 +17,7 @@ from src.rag.models import KnowledgeSearchResponse, KnowledgeSource
 from src.rag.rerankers import RemoteColbertReranker
 
 
-def source(source_id: str) -> KnowledgeSource:
+def source(source_id: str, rule_keys: list[str] | None = None) -> KnowledgeSource:
     return KnowledgeSource(
         document_id=1,
         document_version_id=1,
@@ -33,6 +33,7 @@ def source(source_id: str) -> KnowledgeSource:
         department="CS",
         parent_asins=[],
         policy_key="test",
+        rule_keys=rule_keys or [],
         section_path="test",
         section_title="test",
         content="test",
@@ -96,8 +97,94 @@ def test_alternative_policy_evidence_accepts_any_valid_source_and_rule():
 
     assert result.source_recall_at_k == 1.0
     assert result.reciprocal_rank == 1.0
+    assert result.clause_hit_at_k == 1.0
+    assert result.clause_reciprocal_rank == 1.0
     assert result.rule_keys_present is True
     assert "retrieval_miss" not in result.failure_types
+
+
+def test_clause_metric_rejects_correct_source_with_wrong_rule():
+    case = PipelineEvalCase(
+        case_id="T04",
+        category="normal",
+        question="정책 질문",
+        expected_status="ok",
+        expected_source_ids=["expected"],
+        expected_rule_keys=["expected:2"],
+    )
+
+    class WrongClauseRetriever:
+        def search(self, request):
+            return KnowledgeSearchResponse(
+                status="ok",
+                query=request.query,
+                effective_at=datetime(2026, 9, 2, tzinfo=timezone.utc),
+                sources=[source("expected", ["expected:1"])],
+            )
+
+    result = evaluate_stage("hybrid_rrf", WrongClauseRetriever(), [case])[0]
+
+    assert result.source_recall_at_k == 1.0
+    assert result.clause_hit_at_k == 0.0
+    assert result.clause_reciprocal_rank == 0.0
+    assert "retrieval_miss" in result.failure_types
+
+
+def test_clause_metric_requires_rule_to_belong_to_expected_source():
+    case = PipelineEvalCase(
+        case_id="T05",
+        category="normal",
+        question="정책 질문",
+        expected_status="ok",
+        expected_source_ids=["expected"],
+        expected_rule_keys=["shared:1"],
+    )
+
+    class WrongSourceRetriever:
+        def search(self, request):
+            return KnowledgeSearchResponse(
+                status="ok",
+                query=request.query,
+                effective_at=datetime(2026, 9, 2, tzinfo=timezone.utc),
+                sources=[source("other", ["shared:1"])],
+            )
+
+    result = evaluate_stage("hybrid_rrf", WrongSourceRetriever(), [case])[0]
+
+    assert result.source_recall_at_k == 0.0
+    assert result.clause_hit_at_k == 0.0
+    assert result.rule_keys_present is False
+    assert "retrieval_miss" in result.failure_types
+
+
+def test_clause_metric_does_not_cross_match_source_and_rule():
+    case = PipelineEvalCase(
+        case_id="T06",
+        category="normal",
+        question="정책 질문",
+        expected_status="ok",
+        expected_source_ids=["expected"],
+        expected_rule_keys=["shared:1"],
+    )
+
+    class CrossMatchedRetriever:
+        def search(self, request):
+            return KnowledgeSearchResponse(
+                status="ok",
+                query=request.query,
+                effective_at=datetime(2026, 9, 2, tzinfo=timezone.utc),
+                sources=[
+                    source("expected", ["expected:other"]),
+                    source("other", ["shared:1"]),
+                ],
+            )
+
+    result = evaluate_stage("hybrid_rrf", CrossMatchedRetriever(), [case])[0]
+
+    assert result.source_recall_at_k == 1.0
+    assert result.clause_hit_at_k == 0.0
+    assert result.rule_keys_present is False
+    assert "retrieval_miss" in result.failure_types
 
 
 def test_legacy_stage_names_map_to_explicit_ablation_names():

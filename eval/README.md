@@ -74,7 +74,7 @@ python -m eval.run_tool_metrics eval/results/evaluation_<timestamp>.json
 
 2026-10-09에 같은 24개 질문으로 실행한 결과입니다.
 
-| Pipeline | Recall@5 | MRR | No-evidence F1 | p95 Latency |
+| Pipeline | Source Recall@5 | Source MRR | No-evidence F1 | p95 Latency |
 |---|---:|---:|---:|---:|
 | FTS Only | **1.000** | 0.865 | 0.667 | **67.4 ms** |
 | Vector Only | 0.875 | 0.812 | 0.714 | 68.7 ms |
@@ -91,6 +91,35 @@ python -m eval.run_tool_metrics eval/results/evaluation_<timestamp>.json
   `no_evidence`를 정확히 구분했습니다.
 - 가장 정확한 Full 단계는 p95 약 5.7초가 필요했습니다. 품질 향상과 지연시간의
   교환 관계를 함께 기록하는 이유입니다.
+
+### 문서 검색과 조항 검색을 어떻게 구분하는가
+
+| 지표 | 질문 | 정답 식별자 |
+|---|---|---|
+| Source Recall@K | 올바른 정책 문서를 찾았는가? | `source_id` |
+| Source MRR | 첫 번째 정답 정책 문서가 몇 위인가? | `source_id` |
+| Clause Hit@K | 올바른 문서에서 정확한 조항까지 찾았는가? | `source_id + rule_key` |
+| Clause MRR | 첫 번째 정답 조항이 몇 위인가? | `source_id + rule_key` |
+
+`parent_chunk_id`는 재수집이나 Parser 변경 때 달라질 수 있어 결과 JSON의 디버깅
+정보로만 남깁니다. 정답은 정책을 식별하는 `source_id`와 Parser에 독립적인
+`policy_key:조항번호`를 사용합니다. 여러 조항 중 하나가 모두 타당한 경우에는
+`accepted_evidence`의 Source·Rule 조합 중 하나를 찾으면 통과합니다.
+
+2026-10-18에 깨끗한 DB를 다시 만들고 동일한 24개 질문, 채널별 후보 10개, 최종
+`K=5`로 FTS·Vector·Hybrid를 재실행한 결과입니다. 조항 정답이 있는 16개 사례만
+Clause 지표의 분모에 포함합니다.
+
+| Pipeline | Source Recall@5 | Source MRR | Clause Hit@5 | Clause MRR |
+|---|---:|---:|---:|---:|
+| FTS Only | **1.000** | 0.865 | 0.875 | 0.708 |
+| Vector Only | 0.875 | 0.812 | 0.875 | 0.812 |
+| Hybrid RRF | **1.000** | **0.896** | **1.000** | **0.896** |
+
+이 비교에서는 FTS가 정책 문서는 모두 찾았지만 RP15와 RP22의 정확한 조항을 놓쳤고,
+Vector는 RP07과 RP16을 놓쳤습니다. Hybrid RRF는 두 채널의 결과를 결합해 16개 조항
+정답을 모두 찾았습니다. BGE-M3와 Full의 Clause 지표는 이전 Source 기준선에서
+추정하지 않고 동일 조건으로 다시 실행한 뒤 확정합니다.
 
 ### 전체 실행
 

@@ -120,6 +120,8 @@ class PipelineCaseResult(BaseModel):
     retrieved_parent_chunk_ids: list[int] = Field(default_factory=list)
     source_recall_at_k: float | None
     reciprocal_rank: float | None
+    clause_hit_at_k: float | None = None
+    clause_reciprocal_rank: float | None = None
     status_correct: bool
     rule_keys_present: bool = True
     facts_supported: bool = True
@@ -140,6 +142,9 @@ class StageSummary(BaseModel):
     source_case_count: int
     recall_at_k: float
     mrr: float
+    clause_case_count: int = 0
+    clause_hit_at_k: float = 0.0
+    clause_mrr: float = 0.0
     status_accuracy: float
     no_evidence_precision: float
     no_evidence_recall: float
@@ -275,6 +280,52 @@ def _accepted_evidence_present(
     )
 
 
+def _case_clause_metrics(
+    case: PipelineEvalCase, response: KnowledgeSearchResponse
+) -> tuple[float | None, float | None]:
+    accepted_clauses = [
+        item for item in case.accepted_evidence if item.rule_key is not None
+    ]
+    if accepted_clauses:
+        rank = next(
+            (
+                index
+                for index, source in enumerate(response.sources, start=1)
+                if any(
+                    source.source_id == accepted.source_id
+                    and accepted.rule_key in source.rule_keys
+                    for accepted in accepted_clauses
+                )
+            ),
+            None,
+        )
+        return (1.0 if rank else 0.0), (1.0 / rank if rank else 0.0)
+
+    if not case.expected_rule_keys:
+        return None, None
+
+    expected_sources = set(case.expected_source_ids)
+    expected_rules = set(case.expected_rule_keys)
+    matched_rules = {
+        rule_key
+        for source in response.sources
+        if source.source_id in expected_sources
+        for rule_key in source.rule_keys
+        if rule_key in expected_rules
+    }
+    rank = next(
+        (
+            index
+            for index, source in enumerate(response.sources, start=1)
+            if source.source_id in expected_sources
+            and expected_rules.intersection(source.rule_keys)
+        ),
+        None,
+    )
+    all_clauses_found = matched_rules == expected_rules
+    return (1.0 if all_clauses_found else 0.0), (1.0 / rank if rank else 0.0)
+
+
 def _normalized_text(value: str) -> str:
     normalized = unicodedata.normalize("NFKC", value).lower()
     return "".join(normalized.split())
@@ -373,6 +424,7 @@ def evaluate_stage(
                 dict.fromkeys(source.source_id for source in response.sources)
             )
             recall, reciprocal_rank = _case_source_metrics(case, retrieved)
+            clause_hit, clause_reciprocal_rank = _case_clause_metrics(case, response)
             retrieved_rules = list(
                 dict.fromkeys(
                     rule_key
@@ -380,11 +432,14 @@ def evaluate_stage(
                     for rule_key in source.rule_keys
                 )
             )
-            rules_present = (
-                _accepted_evidence_present(case, response)
-                if case.accepted_evidence
-                else set(case.expected_rule_keys).issubset(retrieved_rules)
-            )
+            if clause_hit is not None:
+                rules_present = clause_hit == 1.0
+            elif case.accepted_evidence:
+                rules_present = _accepted_evidence_present(case, response)
+            else:
+                rules_present = set(case.expected_rule_keys).issubset(
+                    retrieved_rules
+                )
             facts_supported = _facts_supported(case.expected_facts, response)
             access_scope_valid = _access_scope_valid(request, response)
             assessment = response.evidence_assessment
@@ -407,6 +462,8 @@ def evaluate_stage(
                     ],
                     source_recall_at_k=recall,
                     reciprocal_rank=reciprocal_rank,
+                    clause_hit_at_k=clause_hit,
+                    clause_reciprocal_rank=clause_reciprocal_rank,
                     status_correct=response.status == case.expected_status,
                     rule_keys_present=rules_present,
                     facts_supported=facts_supported,
@@ -462,6 +519,18 @@ def evaluate_stage(
                         if case.expected_source_ids or case.accepted_evidence
                         else None
                     ),
+                    clause_hit_at_k=(
+                        0.0
+                        if case.expected_rule_keys
+                        or any(item.rule_key for item in case.accepted_evidence)
+                        else None
+                    ),
+                    clause_reciprocal_rank=(
+                        0.0
+                        if case.expected_rule_keys
+                        or any(item.rule_key for item in case.accepted_evidence)
+                        else None
+                    ),
                     status_correct=False,
                     latency_ms=round(latency_ms, 3),
                     failure_types=["runtime_error"],
@@ -489,6 +558,7 @@ def summarize_stage(
     source_results = [
         result for result in results if result.source_recall_at_k is not None
     ]
+    clause_results = [result for result in results if result.clause_hit_at_k is not None]
     expected_no_evidence = {
         result.case_id for result in results if result.expected_status == "no_evidence"
     }
@@ -518,6 +588,17 @@ def summarize_stage(
         mrr=(
             mean(result.reciprocal_rank for result in source_results)
             if source_results
+            else 0.0
+        ),
+        clause_case_count=len(clause_results),
+        clause_hit_at_k=(
+            mean(result.clause_hit_at_k for result in clause_results)
+            if clause_results
+            else 0.0
+        ),
+        clause_mrr=(
+            mean(result.clause_reciprocal_rank for result in clause_results)
+            if clause_results
             else 0.0
         ),
         status_accuracy=mean(float(result.status_correct) for result in results),
@@ -649,13 +730,14 @@ def _write_csv(results: list[PipelineCaseResult], path: Path) -> None:
 
 def _write_markdown(summaries: list[StageSummary], path: Path) -> None:
     lines = [
-        "| Pipeline | Recall@K | MRR | No-evidence F1 | p95 Latency |",
-        "|---|---:|---:|---:|---:|",
+        "| Pipeline | Source Recall@K | Source MRR | Clause Hit@K | Clause MRR | No-evidence F1 | p95 Latency |",
+        "|---|---:|---:|---:|---:|---:|---:|",
     ]
     for summary in summaries:
         lines.append(
             f"| `{summary.stage}` | {summary.recall_at_k:.3f} | "
-            f"{summary.mrr:.3f} | {summary.no_evidence_f1:.3f} | "
+            f"{summary.mrr:.3f} | {summary.clause_hit_at_k:.3f} | "
+            f"{summary.clause_mrr:.3f} | {summary.no_evidence_f1:.3f} | "
             f"{summary.latency_p95_ms:.1f} ms |"
         )
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -671,21 +753,31 @@ def _comparison_rows(
         stage = STAGE_ALIASES.get(summary["stage"], summary["stage"])
         baseline_by_stage[stage] = summary
 
-    fields = ("recall_at_k", "mrr", "no_evidence_f1", "latency_p95_ms")
+    fields = (
+        "recall_at_k",
+        "mrr",
+        "clause_hit_at_k",
+        "clause_mrr",
+        "no_evidence_f1",
+        "latency_p95_ms",
+    )
     rows = []
     for summary in current:
         previous = baseline_by_stage.get(summary.stage)
         if previous is None:
             continue
         current_values = summary.model_dump()
+        comparable_fields = [field for field in fields if field in previous]
         rows.append(
             {
                 "stage": summary.stage,
-                "baseline": {field: previous[field] for field in fields},
-                "current": {field: current_values[field] for field in fields},
+                "baseline": {field: previous[field] for field in comparable_fields},
+                "current": {
+                    field: current_values[field] for field in comparable_fields
+                },
                 "delta": {
                     field: current_values[field] - float(previous[field])
-                    for field in fields
+                    for field in comparable_fields
                 },
             }
         )
@@ -717,8 +809,11 @@ def _print_summary(summaries: list[StageSummary]) -> None:
     print("\nRAG 파이프라인 비교 결과")
     for summary in summaries:
         print(
-            f"- {summary.stage}: Recall@K={summary.recall_at_k:.3f}, "
-            f"MRR={summary.mrr:.3f}, 상태정확도={summary.status_accuracy:.3f}, "
+            f"- {summary.stage}: Source Recall@K={summary.recall_at_k:.3f}, "
+            f"Source MRR={summary.mrr:.3f}, "
+            f"Clause Hit@K={summary.clause_hit_at_k:.3f}, "
+            f"Clause MRR={summary.clause_mrr:.3f}, "
+            f"상태정확도={summary.status_accuracy:.3f}, "
             f"no_evidence F1={summary.no_evidence_f1:.3f}, "
             f"p50={summary.latency_p50_ms:.1f}ms, "
             f"p95={summary.latency_p95_ms:.1f}ms, 오류={summary.error_count}"

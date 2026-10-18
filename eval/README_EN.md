@@ -75,7 +75,7 @@ come from the stage being added, not from an easier or harder question set.
 
 The following results use the same 24 questions and were recorded on 2026-10-09.
 
-| Pipeline | Recall@5 | MRR | No-evidence F1 | p95 Latency |
+| Pipeline | Source Recall@5 | Source MRR | No-evidence F1 | p95 Latency |
 |---|---:|---:|---:|---:|
 | FTS Only | **1.000** | 0.865 | 0.667 | **67.4 ms** |
 | Vector Only | 0.875 | 0.812 | 0.714 | 68.7 ms |
@@ -92,6 +92,37 @@ Interpretation:
   correctly separated `no_evidence` cases.
 - The most accurate Full path had a p95 latency of about 5.7 seconds, so quality
   and latency must be reported together.
+
+### How document and clause retrieval are separated
+
+| Metric | Question | Gold identifier |
+|---|---|---|
+| Source Recall@K | Was the correct policy document retrieved? | `source_id` |
+| Source MRR | How high was the first correct policy document? | `source_id` |
+| Clause Hit@K | Was the exact clause retrieved from the correct document? | `source_id + rule_key` |
+| Clause MRR | How high was the first correct clause? | `source_id + rule_key` |
+
+`parent_chunk_id` remains diagnostic because re-ingestion or a Parser change can
+replace physical Chunk IDs. Gold Evidence instead uses the stable policy
+`source_id` and Parser-independent `policy_key:clause_number`. When several
+clauses are valid alternatives, a matching Source–Rule pair in
+`accepted_evidence` is sufficient.
+
+The database was rebuilt from scratch on 2026-10-18 and FTS, Vector, and Hybrid
+retrieval were rerun on the same 24 questions with ten candidates per channel
+and final `K=5`. Only the 16 cases with clause Gold Labels contribute to the
+Clause metrics.
+
+| Pipeline | Source Recall@5 | Source MRR | Clause Hit@5 | Clause MRR |
+|---|---:|---:|---:|---:|
+| FTS Only | **1.000** | 0.865 | 0.875 | 0.708 |
+| Vector Only | 0.875 | 0.812 | 0.875 | 0.812 |
+| Hybrid RRF | **1.000** | **0.896** | **1.000** | **0.896** |
+
+FTS found every policy document but missed the exact clauses for RP15 and RP22;
+Vector missed RP07 and RP16. Hybrid RRF combined both channels and found all 16
+labeled clauses. BGE-M3 and Full clause metrics are not inferred from the older
+source-only baseline and will be finalized after a like-for-like rerun.
 
 ### Full run
 
