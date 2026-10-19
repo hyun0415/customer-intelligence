@@ -17,11 +17,15 @@ from src.rag.models import KnowledgeSearchResponse, KnowledgeSource
 from src.rag.rerankers import RemoteColbertReranker
 
 
-def source(source_id: str, rule_keys: list[str] | None = None) -> KnowledgeSource:
+def source(
+    source_id: str,
+    rule_keys: list[str] | None = None,
+    parent_chunk_id: int = 1,
+) -> KnowledgeSource:
     return KnowledgeSource(
         document_id=1,
         document_version_id=1,
-        parent_chunk_id=1,
+        parent_chunk_id=parent_chunk_id,
         matched_child_ids=[1],
         source_id=source_id,
         title=source_id,
@@ -82,7 +86,11 @@ def test_alternative_policy_evidence_accepts_any_valid_source_and_rule():
             AcceptedEvidence(source_id="policy-b", rule_key="policy-b:2"),
         ],
     )
-    matched = source("policy-b").model_copy(update={"rule_keys": ["policy-b:2"]})
+    matched = source(
+        "policy-b",
+        ["policy-b:2"],
+        parent_chunk_id=42,
+    )
 
     class AlternativeRetriever:
         def search(self, request):
@@ -99,6 +107,8 @@ def test_alternative_policy_evidence_accepts_any_valid_source_and_rule():
     assert result.reciprocal_rank == 1.0
     assert result.clause_hit_at_k == 1.0
     assert result.clause_reciprocal_rank == 1.0
+    assert result.matched_clause_parent_chunk_ids == [42]
+    assert result.first_matched_clause_parent_rank == 1
     assert result.rule_keys_present is True
     assert "retrieval_miss" not in result.failure_types
 
@@ -127,6 +137,8 @@ def test_clause_metric_rejects_correct_source_with_wrong_rule():
     assert result.source_recall_at_k == 1.0
     assert result.clause_hit_at_k == 0.0
     assert result.clause_reciprocal_rank == 0.0
+    assert result.matched_clause_parent_chunk_ids == []
+    assert result.first_matched_clause_parent_rank is None
     assert "retrieval_miss" in result.failure_types
 
 

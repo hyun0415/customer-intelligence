@@ -107,19 +107,20 @@ python -m eval.run_tool_metrics eval/results/evaluation_<timestamp>.json
 `accepted_evidence`의 Source·Rule 조합 중 하나를 찾으면 통과합니다.
 
 2026-10-18에 깨끗한 DB를 다시 만들고 동일한 24개 질문, 채널별 후보 10개, 최종
-`K=5`로 FTS·Vector·Hybrid를 재실행한 결과입니다. 조항 정답이 있는 16개 사례만
-Clause 지표의 분모에 포함합니다.
+`K=5`로 전체 단계를 실행한 결과입니다. 조항 정답이 있는 16개 사례만 Clause 지표의
+분모에 포함합니다.
 
 | Pipeline | Source Recall@5 | Source MRR | Clause Hit@5 | Clause MRR |
 |---|---:|---:|---:|---:|
 | FTS Only | **1.000** | 0.865 | 0.875 | 0.708 |
 | Vector Only | 0.875 | 0.812 | 0.875 | 0.812 |
-| Hybrid RRF | **1.000** | **0.896** | **1.000** | **0.896** |
+| Hybrid RRF | **1.000** | 0.896 | **1.000** | 0.896 |
+| Hybrid RRF + BGE-M3 | **1.000** | 0.969 | **1.000** | 0.880 |
+| Full | **1.000** | **1.000** | **1.000** | **0.969** |
 
-이 비교에서는 FTS가 정책 문서는 모두 찾았지만 RP15와 RP22의 정확한 조항을 놓쳤고,
-Vector는 RP07과 RP16을 놓쳤습니다. Hybrid RRF는 두 채널의 결과를 결합해 16개 조항
-정답을 모두 찾았습니다. BGE-M3와 Full의 Clause 지표는 이전 Source 기준선에서
-추정하지 않고 동일 조건으로 다시 실행한 뒤 확정합니다.
+FTS는 정책 문서는 모두 찾았지만 RP15와 RP22의 정확한 조항을 놓쳤고, Vector는 RP07과
+RP16을 놓쳤습니다. Hybrid RRF는 두 채널을 결합해 16개 조항 정답을 모두 찾았습니다.
+BGE-M3는 Source 순위를 높였고, Full은 근거 판별 후 조항 MRR 0.969를 기록했습니다.
 
 ### 전체 실행
 
@@ -142,8 +143,11 @@ python -m eval.rag_pipeline_comparison `
 python -m eval.rag_pipeline_comparison --stages full --case-id RP17
 ```
 
-JSON·CSV·요약 Markdown은 `eval/results/`에 저장됩니다. 확정 기준선은
-[openai_rag_final.json](baselines/openai_rag_final.json)입니다.
+JSON·CSV·요약 Markdown은 `eval/results/`에 저장됩니다. 상세 CSV의
+`retrieved_parent_chunk_ids`는 검색된 Parent 전체를,
+`matched_clause_parent_chunk_ids`와 `first_matched_clause_parent_rank`는 정답 조항과
+일치한 Parent와 최초 순위를 기록합니다. 확정 기준선은
+[openai_rag_source_clause_20261018.json](baselines/openai_rag_source_clause_20261018.json)입니다.
 
 ## 3. 정책 권한이 검색 경로에서 우회되지 않는가
 

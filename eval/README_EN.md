@@ -108,21 +108,22 @@ replace physical Chunk IDs. Gold Evidence instead uses the stable policy
 clauses are valid alternatives, a matching Source–Rule pair in
 `accepted_evidence` is sufficient.
 
-The database was rebuilt from scratch on 2026-10-18 and FTS, Vector, and Hybrid
-retrieval were rerun on the same 24 questions with ten candidates per channel
-and final `K=5`. Only the 16 cases with clause Gold Labels contribute to the
-Clause metrics.
+The database was rebuilt from scratch on 2026-10-18 and all stages were run on
+the same 24 questions with ten candidates per channel and final `K=5`. Only the
+16 cases with clause Gold Labels contribute to the Clause metrics.
 
 | Pipeline | Source Recall@5 | Source MRR | Clause Hit@5 | Clause MRR |
 |---|---:|---:|---:|---:|
 | FTS Only | **1.000** | 0.865 | 0.875 | 0.708 |
 | Vector Only | 0.875 | 0.812 | 0.875 | 0.812 |
-| Hybrid RRF | **1.000** | **0.896** | **1.000** | **0.896** |
+| Hybrid RRF | **1.000** | 0.896 | **1.000** | 0.896 |
+| Hybrid RRF + BGE-M3 | **1.000** | 0.969 | **1.000** | 0.880 |
+| Full | **1.000** | **1.000** | **1.000** | **0.969** |
 
 FTS found every policy document but missed the exact clauses for RP15 and RP22;
 Vector missed RP07 and RP16. Hybrid RRF combined both channels and found all 16
-labeled clauses. BGE-M3 and Full clause metrics are not inferred from the older
-source-only baseline and will be finalized after a like-for-like rerun.
+labeled clauses. BGE-M3 improved Source ranking, while Full reached a Clause MRR
+of 0.969 after evidence assessment.
 
 ### Full run
 
@@ -145,8 +146,11 @@ Re-run one repaired case with:
 python -m eval.rag_pipeline_comparison --stages full --case-id RP17
 ```
 
-JSON, CSV, and Markdown summaries are written under `eval/results/`. The final
-baseline is [openai_rag_final.json](baselines/openai_rag_final.json).
+JSON, CSV, and Markdown summaries are written under `eval/results/`. In the
+per-case CSV, `retrieved_parent_chunk_ids` lists all retrieved Parents, while
+`matched_clause_parent_chunk_ids` and `first_matched_clause_parent_rank` record
+the matching Parents and their first rank. The final baseline is
+[openai_rag_source_clause_20261018.json](baselines/openai_rag_source_clause_20261018.json).
 
 ## 3. Can retrieval bypass policy access rules?
 

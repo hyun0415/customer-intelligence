@@ -10,18 +10,17 @@
 |---|---|
 | `final_evaluation_summary.csv` | RAG 단계 비교, Agent Tool 평가와 정책 접근 통제의 최종 수치 |
 | `eval/datasets/` | 평가 질문과 명시된 정답 조건 |
-| `eval/baselines/openai_rag_final.json` | 질문별 결과를 비교할 수 있는 최종 기준선 |
+| `eval/baselines/openai_rag_source_clause_20261018.json` | 질문별 Source·조항 결과를 비교할 수 있는 최종 기준선 |
 
-최종 평가는 2026-10-09에 합성 승인 정책 10개와 정책 질문 24개로 실행했습니다.
+최종 RAG 평가는 2026-10-18에 합성 승인 정책 10개와 정책 질문 24개로 실행했습니다.
 검색 채널별 후보는 10개, 최종 Parent는 `K=5`로 통일했습니다. BGE-M3 재정렬은
 Colab GPU 서비스로 실행했고, 전체 파이프라인의 근거 판별은 OpenAI 프로필을
 사용했습니다.
 
-이 기준선의 Recall과 MRR은 올바른 정책 문서를 찾는 Source 수준 지표입니다.
-2026-10-18에는 DB를 새로 구성한 뒤 FTS·Vector·Hybrid를 재실행해
-`source_id + rule_key` 기반 조항 지표를 추가했습니다. Hybrid RRF의 Clause Hit@5는
-1.000, Clause MRR은 0.896이었습니다. BGE-M3와 Full의 조항 수치는 같은 조건으로
-다시 실행하기 전까지 비워 둡니다.
+Source Recall과 MRR은 올바른 정책 문서를 찾았는지 측정합니다. Clause Hit@5와 Clause
+MRR은 최종 검색 단위인 Parent Chunk에 `source_id + rule_key`로 식별한 조항이
+포함됐는지 측정합니다. 질문별 상세 CSV에는 검색된 Parent Chunk ID, 정답 조항과 일치한
+Parent Chunk ID와 최초 순위가 함께 저장됩니다.
 
 Agent 평가는 리뷰 질문 15건과 리뷰·정책 결합 질문 9건에서 Tool 선택을 확인했습니다.
 24건 모두 필요한 Tool을 선택했고, 명시적인 인자 정답이 있는 2건도 모두 통과했습니다.

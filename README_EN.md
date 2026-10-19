@@ -134,7 +134,7 @@ product, department, and jurisdiction filters.
 
 | Evaluation set | Question being tested | Agent involved | Primary metrics |
 |---|---|---|---|
-| 24-case RAG pipeline | Can the retrieval engine find the correct policy and exact clause? | No | Recall@5, MRR, expected-clause Parent Hit, status accuracy, latency |
+| 24-case RAG pipeline | Can the retrieval engine find the correct policy and exact clause? | No | Recall@5, MRR, Clause Hit@5, status accuracy, latency |
 | 9-case policy Agent | Can the Agent operate RAG with the correct Tool and arguments? | Yes | Tool execution, policy status, source, clause, facts, answer grounding |
 
 This separation distinguishes retrieval failures from failures caused by an
@@ -145,7 +145,7 @@ change after re-ingestion.
 
 ![Automated evaluation and model-role transition flow](docs/assets/diagrams/evaluation-model-optimization-flow-en.png)
 
-| Pipeline | Source Recall@5 | Source MRR | Expected-clause Parent Hit@5 | Expected-clause Parent MRR | Status accuracy | No-evidence F1 | p95 |
+| Pipeline | Source Recall@5 | Source MRR | Clause Hit@5 | Clause MRR | Status accuracy | No-evidence F1 | p95 |
 |---|---:|---:|---:|---:|---:|---:|---:|
 | FTS Only | **1.000** | 0.865 | 0.875 | 0.708 | 0.833 | 0.667 | 94.3 ms |
 | Vector Only | 0.875 | 0.812 | 0.875 | 0.812 | 0.833 | 0.714 | **76.5 ms** |
@@ -153,11 +153,29 @@ change after re-ingestion.
 | Hybrid RRF + BGE-M3 | **1.000** | 0.969 | **1.000** | 0.880 | 0.833 | 0.667 | 1,139.9 ms |
 | Full pipeline + evidence assessment | **1.000** | **1.000** | **1.000** | **0.969** | **1.000** | **1.000** | 5,195.6 ms |
 
+<details>
+<summary><strong>View metric definitions and ablation findings</strong></summary>
+
+- **Status accuracy:** the share of questions correctly classified as
+  `answerable`, `insufficient evidence`, or `policy conflict`.
+
+- **Luna's role:** in the full pipeline, Luna checks whether the retrieved
+  Parent Chunks directly support an answer. A score of 1.000 means all 24
+  questions received the expected status.
+
+- **Difference from earlier stages:** FTS, Vector, RRF, and BGE-M3 do not use
+  Luna. They mark a result as `answerable` when evidence is retrieved and as
+  `insufficient evidence` when none is found. Their status accuracy therefore
+  measures retrieval-based classification, not Luna's performance.
+
+- **No-evidence F1:** separately measures whether unsupported questions were
+  identified correctly and withheld from answering.
+
 ### Ablation Findings
 
 - **FTS Only:** performed well when questions repeated exact policy terms and
   numbers. It found every policy document, but ranked the correct clause less
-  reliably (Parent MRR 0.708).
+  reliably (Clause MRR 0.708).
 
 - **Vector Only:** improved clause ranking for paraphrased questions (MRR
   0.812), but missed some exact-number and policy-term cases, reducing Source
@@ -213,6 +231,8 @@ failure: for example, the Agent passed the natural-language department name
 
 - **Next experiment:** standardize department and jurisdiction values before
   retrieval, limit query rewriting, and rerun the same nine cases.
+
+</details>
 
 Every stage in the 24-case RAG evaluation used the same limit of ten candidates
 per retrieval channel and a final Parent `K=5`. A separate 11-case access

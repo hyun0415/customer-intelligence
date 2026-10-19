@@ -118,6 +118,8 @@ class PipelineCaseResult(BaseModel):
     retrieved_source_ids: list[str]
     retrieved_rule_keys: list[str] = Field(default_factory=list)
     retrieved_parent_chunk_ids: list[int] = Field(default_factory=list)
+    matched_clause_parent_chunk_ids: list[int] = Field(default_factory=list)
+    first_matched_clause_parent_rank: int | None = None
     source_recall_at_k: float | None
     reciprocal_rank: float | None
     clause_hit_at_k: float | None = None
@@ -326,6 +328,32 @@ def _case_clause_metrics(
     return (1.0 if all_clauses_found else 0.0), (1.0 / rank if rank else 0.0)
 
 
+def _matched_clause_parents(
+    case: PipelineEvalCase, response: KnowledgeSearchResponse
+) -> list[tuple[int, int]]:
+    accepted_clauses = [
+        item for item in case.accepted_evidence if item.rule_key is not None
+    ]
+    expected_sources = set(case.expected_source_ids)
+    expected_rules = set(case.expected_rule_keys)
+    matches = []
+    for rank, source in enumerate(response.sources, start=1):
+        if accepted_clauses:
+            matched = any(
+                source.source_id == accepted.source_id
+                and accepted.rule_key in source.rule_keys
+                for accepted in accepted_clauses
+            )
+        else:
+            matched = (
+                source.source_id in expected_sources
+                and bool(expected_rules.intersection(source.rule_keys))
+            )
+        if matched:
+            matches.append((rank, source.parent_chunk_id))
+    return matches
+
+
 def _normalized_text(value: str) -> str:
     normalized = unicodedata.normalize("NFKC", value).lower()
     return "".join(normalized.split())
@@ -425,6 +453,7 @@ def evaluate_stage(
             )
             recall, reciprocal_rank = _case_source_metrics(case, retrieved)
             clause_hit, clause_reciprocal_rank = _case_clause_metrics(case, response)
+            matched_clause_parents = _matched_clause_parents(case, response)
             retrieved_rules = list(
                 dict.fromkeys(
                     rule_key
@@ -460,6 +489,15 @@ def evaluate_stage(
                     retrieved_parent_chunk_ids=[
                         source.parent_chunk_id for source in response.sources
                     ],
+                    matched_clause_parent_chunk_ids=[
+                        parent_chunk_id
+                        for _, parent_chunk_id in matched_clause_parents
+                    ],
+                    first_matched_clause_parent_rank=(
+                        matched_clause_parents[0][0]
+                        if matched_clause_parents
+                        else None
+                    ),
                     source_recall_at_k=recall,
                     reciprocal_rank=reciprocal_rank,
                     clause_hit_at_k=clause_hit,

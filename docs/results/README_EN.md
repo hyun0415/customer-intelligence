@@ -10,18 +10,18 @@ generated under `eval/results/` and remain outside Git.
 |---|---|
 | `final_evaluation_summary.csv` | Final RAG stage comparison, Agent Tool metrics, and policy access results |
 | `eval/datasets/` | Evaluation questions and explicit gold conditions |
-| `eval/baselines/openai_rag_final.json` | Final per-case baseline for later comparisons |
+| `eval/baselines/openai_rag_source_clause_20261018.json` | Final per-case Source and clause baseline |
 
-The final evaluation ran on 2026-10-09 with ten synthetic approved policies and
+The final RAG evaluation ran on 2026-10-18 with ten synthetic approved policies and
 24 policy questions. Every retrieval channel used ten candidates and every stage
 returned a final Parent `K=5`. BGE-M3 reranking ran through the Colab GPU service,
 while the full pipeline used the OpenAI profile for evidence assessment.
 
-Recall and MRR in that baseline are Source-level metrics for retrieving the
-correct policy document. On 2026-10-18, the database was rebuilt and FTS,
-Vector, and Hybrid retrieval were rerun with `source_id + rule_key` clause
-scoring. Hybrid RRF reported Clause Hit@5 of 1.000 and Clause MRR of 0.896.
-BGE-M3 and Full clause values remain blank until a like-for-like rerun.
+Source Recall and MRR measure whether the correct policy document was found.
+Clause Hit@5 and Clause MRR measure whether a retrieved Parent Chunk contains a
+clause identified by `source_id + rule_key`. The per-case CSV also records all
+retrieved Parent Chunk IDs, matching Parent Chunk IDs, and the first matching
+rank.
 
 The Agent suite covered 15 review questions and nine review-policy questions.
 All 24 cases selected the required Tools, and both cases with explicit argument
