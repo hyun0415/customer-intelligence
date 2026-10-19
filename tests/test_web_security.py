@@ -146,6 +146,51 @@ def test_rag_tool_injects_server_access_context(monkeypatch):
     assert captured["request"].access_grants == grants
 
 
+def test_policy_search_options_are_limited_by_server_access(monkeypatch):
+    captured = {}
+
+    class FakeResult:
+        def fetchall(self):
+            return [
+                {
+                    "collection": "compensation_policy",
+                    "collection_description": "보상 정책",
+                    "jurisdiction": "KR",
+                    "department": "CS",
+                }
+            ]
+
+    class FakeConnection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def execute(self, query, params):
+            captured["query"] = query
+            captured["params"] = params
+            return FakeResult()
+
+    monkeypatch.setattr(rag_tools, "connect", lambda: FakeConnection())
+    grants = [PolicyAccessGrant("compensation_policy", "KR", "CS")]
+
+    with policy_access_context(grants):
+        result = rag_tools.get_policy_search_options_tool.invoke({})
+
+    assert "rag_documents" in captured["query"]
+    assert captured["params"] == [
+        "compensation_policy",
+        ["KR", "ALL_JURISDICTIONS"],
+        ["CS", "ALL_DEPARTMENTS"],
+    ]
+    assert result["collections"] == [
+        {"value": "compensation_policy", "description": "보상 정책"}
+    ]
+    assert result["jurisdictions"] == ["KR"]
+    assert result["departments"] == ["CS"]
+
+
 def test_product_context_overrides_policy_tool_asin(monkeypatch):
     captured = {}
 

@@ -15,7 +15,10 @@ from src.database import (
     get_reviews_by_date,
     search_products,
 )
-from src.rag_tools import search_internal_knowledge_tool
+from src.rag_tools import (
+    get_policy_search_options_tool,
+    search_internal_knowledge_tool,
+)
 
 
 def _context_parent_asin(requested: str) -> str:
@@ -195,6 +198,7 @@ AGENT_TOOLS = [
     get_monthly_review_trend_tool,
     compare_products_tool,
     get_review_patterns_tool,
+    get_policy_search_options_tool,
     search_internal_knowledge_tool,
     escalate_case_tool,
 ]

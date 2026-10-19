@@ -39,8 +39,21 @@
 선택되는지 확인합니다. 답변 문체보다 **어떤 Tool을 어떤 인자로 호출했는지**가 이
 실험의 핵심입니다.
 
+정책 질문에서는 Terra가 먼저 `get_policy_search_options_tool`로 현재 사용자가 조회할
+수 있는 Collection·관할·부서 값을 확인합니다. 이후 Terra는 정책 검색 Tool과 인자만
+선택하며, Python 서버가 parameterized SQL과 권한 필터를 적용합니다. 이 검증은 모델이
+DB 스키마를 추측하거나 질문의 전달 대상 부서를 검색 필터로 오해하는 문제를 찾기 위한
+것입니다.
+
 ```powershell
 python -m eval.run_agent_evaluation --suite all
+```
+
+정책 경로 9건만 다시 확인할 때는 다음 명령을 사용합니다.
+
+```powershell
+python -m eval.run_agent_evaluation --suite policy
+python -m eval.run_judge eval/results/evaluation_<timestamp>.json
 ```
 
 | 결과 항목 | 의미 |
@@ -241,6 +254,9 @@ Smoke test는 서비스가 연결되는지만 확인하며 24개 고정 평가�
 | `eval/datasets/policy_access_cases.json` | 정책 접근 허용·차단 11건 |
 | `eval/results/` | 실행별 JSON·CSV·Markdown |
 | `eval/baselines/` | 비교 기준으로 확정한 결과 |
+| [`docs/results/rag_24_case_results.csv`](../docs/results/rag_24_case_results.csv) | 공개용 24개 질문 × 5단계 결과 |
+| [`docs/results/policy_agent_9_case_results.csv`](../docs/results/policy_agent_9_case_results.csv) | 공개용 Terra 정책 Agent 9건 결과 |
+| [`docs/results/review_agent_15_questions.csv`](../docs/results/review_agent_15_questions.csv) | 공개용 불만 리뷰 분석 질문 15건 |
 
 정답은 가능한 한 안정적인 정책 `source_id`와 `policy_key:조항번호`로 기록합니다.
 여러 조항이 모두 타당한 경우에는 대안 정답을 함께 허용합니다.

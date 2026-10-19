@@ -11,6 +11,8 @@ def test_rag_prompt_contains_no_evidence_and_conflict_guards():
     assert "정책이 없다" in SYSTEM_PROMPT
     assert "충분히 관련된 근거를 찾지 못했다" in SYSTEM_PROMPT
     assert "의료·안전 문제" in SYSTEM_PROMPT
+    assert "get_policy_search_options_tool" in SYSTEM_PROMPT
+    assert "보고·전달 대상" in SYSTEM_PROMPT
 
 
 def test_rag_evaluation_cases_reference_registered_tools():

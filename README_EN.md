@@ -199,38 +199,39 @@ target-policy ordering**, and the **full pipeline best blocked unsupported
 answers**. Latency excludes the shared query-embedding step for a fair stage
 comparison.
 
-Across the nine policy Agent cases, every required Tool was selected and
-executed, with no BGE-M3 or evidence-assessment runtime errors. However, only
-five expected policy statuses and six expected sources and clauses matched.
-These failures expose Agent orchestration issues rather than a retrieval-engine
-failure: for example, the Agent passed the natural-language department name
-`품질팀` instead of the stored value `CS`, or rewrote a query too broadly.
+The policy Agent now calls a validated Tool that returns the Collections,
+jurisdictions, and departments it is allowed to search. Terra selects only the
+Tools and their arguments; the Python server executes parameterized SQL and
+enforces user-specific access filters. On the same nine cases, Tool selection
+and execution passed 9/9, all four explicitly checked arguments passed, and the
+average evaluation score improved from 4.56 to 4.74.
 
 | Policy Agent evaluation | Result |
 |---|---:|
 | Tool selection and execution | **9/9** |
-| BGE-M3 / evidence-assessment errors | **0/9 / 0/9** |
-| Expected policy status matched | 5/9 |
-| Expected policy source / clause present | 6/9 / 6/9 |
-| Expected facts present | 7/9 |
-| Correct abstention after `no_evidence` | **9/9** |
-| Average GPT-5.6 Sol evaluation | 4.56/5 |
+| Explicitly checked Tool arguments | **4/4** |
+| BGE-M3 applied / evidence assessment completed | 2/9 / **9/9** |
+| Expected policy status matched | 8/9 |
+| Expected policy source / clause present | 8/9 / 7/9 |
+| Expected facts present | 8/9 |
+| Correct abstention after `no_evidence` | **3/3** |
+| Average GPT-5.6 Sol evaluation | **4.74/5** |
 
-- **Direct retrieval vs. Agent:** the 24 fixed-condition cases found every
-  target clause, while the nine Agent cases lost accuracy when questions were
-  converted into search conditions.
+- **What improved:** reporting targets such as the quality team are no longer
+  mistaken for database department filters, and product and jurisdiction
+  arguments are passed with the server-approved values.
 
-- **Main failure causes:** two cases used a department name that did not match
-  the database value, and one broadened the question enough to retrieve weakly
-  related evidence.
+- **Remaining limitation:** two compound questions combined several symptoms or
+  policy conditions into one search query. This omitted a required clause or
+  caused conservative evidence rejection. The failure is in Terra's query
+  construction, not SQL execution or access control.
 
-- **Evaluation rule to refine:** for a question about a nonexistent
-  compensation rule, the Agent did not invent an answer but displayed related
-  policies. The evaluation should distinguish this safe response from a wrong
-  answer.
+- **Runtime condition:** remote BGE-M3 failed to connect in seven cases, so the
+  system used its RRF fallback. Evidence assessment completed in all nine cases;
+  the two runtime states are reported separately.
 
-- **Next experiment:** standardize department and jurisdiction values before
-  retrieval, limit query rewriting, and rerun the same nine cases.
+- **Next experiment:** split compound questions into condition-specific searches
+  and measure the accuracy gain against the added Tool calls and latency.
 
 </details>
 
@@ -242,6 +243,10 @@ Because this is a small synthetic policy set, these numbers are not an estimate
 of accuracy for arbitrary questions. The [evaluation guide](eval/README_EN.md)
 documents the intent, gold data, and reproduction steps. A compact public
 snapshot is available in the [evaluation results summary](docs/results/README_EN.md).
+
+- [The 24 RAG questions and five-stage results](docs/results/rag_24_case_results.csv)
+- [Nine Terra policy-Agent cases and per-question results](docs/results/policy_agent_9_case_results.csv)
+- [The 15 complaint-analysis questions](docs/results/review_agent_15_questions.csv)
 
 ## Quick Start
 

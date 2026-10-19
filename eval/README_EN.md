@@ -40,8 +40,22 @@ This suite covers product lookup, review aggregation, Aspect analysis, policy
 retrieval, and escalation. Its primary concern is **which Tool was called with
 which arguments**, not writing style.
 
+For policy questions, Terra first calls `get_policy_search_options_tool` to
+obtain the Collections, jurisdictions, and departments available to the current
+user. Terra then selects only the policy-search Tool and arguments; the Python
+server applies parameterized SQL and access filters. This catches cases where
+the model guesses the database schema or mistakes a reporting target for a
+search filter.
+
 ```powershell
 python -m eval.run_agent_evaluation --suite all
+```
+
+Use the following commands to rerun only the nine policy-path cases:
+
+```powershell
+python -m eval.run_agent_evaluation --suite policy
+python -m eval.run_judge eval/results/evaluation_<timestamp>.json
 ```
 
 | Result | Meaning |
@@ -243,6 +257,9 @@ Smoke tests confirm connectivity; they do not replace the fixed 24-case suite.
 | `eval/datasets/policy_access_cases.json` | 11 access allow/deny cases |
 | `eval/results/` | Per-run JSON, CSV, and Markdown |
 | `eval/baselines/` | Results frozen for later comparison |
+| [`docs/results/rag_24_case_results.csv`](../docs/results/rag_24_case_results.csv) | Published 24-question × five-stage results |
+| [`docs/results/policy_agent_9_case_results.csv`](../docs/results/policy_agent_9_case_results.csv) | Published nine-case Terra policy-Agent results |
+| [`docs/results/review_agent_15_questions.csv`](../docs/results/review_agent_15_questions.csv) | Published 15 complaint-analysis questions |
 
 Gold Evidence prefers stable policy `source_id` and
 `policy_key:clause_number` identifiers. Multiple valid clauses are represented

@@ -2,11 +2,16 @@ INTERNAL_KNOWLEDGE_RULES = """
 ## 사내 정책 RAG 사용 규칙
 
 1. 환불, 재배송, 보상, 쿠폰, 프로모션 중복, CS 절차, escalation,
-   예외 승인 또는 제품별 운영 가이드를 묻는 질문에는
+   예외 승인 또는 제품별 운영 가이드를 묻는 질문에는 먼저
+   get_policy_search_options_tool로 현재 사용할 수 있는 정책 필터값을 확인한 뒤
    search_internal_knowledge_tool을 사용한다.
 
 2. 리뷰의 발생 빈도와 내부 정책을 함께 묻는 질문에서는 리뷰 관련 SQL Tool과
    search_internal_knowledge_tool을 모두 사용한다.
+
+   정책 검색어는 사용자가 물은 정책 조건을 그대로 유지한다. 리뷰 분석에서 함께 발견한
+   다른 불만 유형을 원래 질문과 합쳐 검색 범위를 넓히지 않는다. 여러 조건의 적용 여부를
+   확인해야 한다면 조건별로 구분해 검색하고 답변한다.
 
 3. parent_asin이 주어지면 정책 검색 Tool에도 동일한 parent_asin을 전달한다.
    서버가 상품 컨텍스트를 제공한 대화에서는 그 parent_asin을 변경하지 않는다.
@@ -21,6 +26,15 @@ INTERNAL_KNOWLEDGE_RULES = """
 
 5. 질문 의도가 명확할 때만 collections를 제한한다. 불명확하면 collections를
    생략하여 관련 정책을 과도하게 제외하지 않는다.
+
+   department는 정책을 소유하거나 적용받는 부서를 제한하는 필터다. 질문에 품질팀,
+   의료·안전 담당자 등 보고·전달 대상이 등장했다는 이유만으로 department를 설정하지
+   않는다. 이런 대상은 query에 유지하고, 사용자가 특정 부서가 소유한 정책만 요청한
+   경우에만 get_policy_search_options_tool이 반환한 표준값을 사용한다.
+
+   jurisdiction은 사용자가 국가나 관할을 명시한 경우에만 설정한다. 사용자가 명시한
+   관할이 조회된 선택지에 없어도 임의의 다른 관할로 바꾸지 말고, 그 값을 그대로
+   search_internal_knowledge_tool에 전달해 근거 존재 여부를 확인한다.
 
 6. 정책 Tool의 status가 no_evidence이면 금액, 기한, 자격 또는 승인 조건을
    일반 상식, 리뷰나 외부 자료로 추측하거나 생성하지 않는다. "정책이 없다"고
