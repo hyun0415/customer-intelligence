@@ -198,7 +198,9 @@ def get_conversation(
     user: Annotated[CurrentUser, Depends(current_user)],
     repository: Annotated[WebRepository, Depends(get_repository)],
 ):
-    conversation = repository.get_conversation(user.user_id, conversation_id)
+    conversation = repository.get_conversation(
+        user.user_id, conversation_id, user.policy_scopes
+    )
     if conversation is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "대화를 찾을 수 없습니다.")
     return conversation
@@ -216,7 +218,9 @@ def create_message(
     user: Annotated[CurrentUser, Depends(current_user)],
     repository: Annotated[WebRepository, Depends(get_repository)],
 ):
-    if repository.get_conversation(user.user_id, conversation_id) is None:
+    if repository.get_conversation(
+        user.user_id, conversation_id, user.policy_scopes
+    ) is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "대화를 찾을 수 없습니다.")
     settings = get_settings()
     job = AgentJobStore().create(

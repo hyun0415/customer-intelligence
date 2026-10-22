@@ -6,9 +6,13 @@ from langchain_core.messages import ToolMessage
 from backend.app.audit import sanitize_metadata, session_fingerprint
 from backend.app.config import WebSettings
 from backend.app.google_identity import validate_google_identity
-from backend.app.tool_events import collect_run_metadata
+from backend.app.tool_events import collect_run_metadata, remove_invalid_citations
 from src import rag_tools
-from src.auth.access import PolicyAccessGrant, policy_access_context
+from src.auth.access import (
+    PolicyAccessGrant,
+    policy_access_context,
+    policy_source_is_allowed,
+)
 from src.auth.product_context import ProductContext, product_context
 from src.rag.models import KnowledgeSearchRequest
 from src.rag.retriever import HybridRetriever
@@ -255,3 +259,74 @@ def test_tool_event_parser_accepts_langchain_stringified_dict():
     metadata = collect_run_metadata([message])
 
     assert metadata.status == "no_evidence"
+
+
+def test_policy_sources_keep_parent_level_citations():
+    message = ToolMessage(
+        name="search_internal_knowledge_tool",
+        tool_call_id="call-1",
+        content={
+            "status": "ok",
+            "sources": [
+                {
+                    "source_id": "reshipment-policy",
+                    "parent_chunk_id": 31,
+                    "title": "재배송 정책",
+                    "section_title": "기본 처리",
+                    "content": "무료 재배송은 1회까지 허용한다.",
+                    "rule_keys": ["reshipment-limit"],
+                    "collection": "compensation_policy",
+                    "jurisdiction": "KR",
+                    "department": "CS",
+                },
+                {
+                    "source_id": "reshipment-policy",
+                    "parent_chunk_id": 32,
+                    "title": "재배송 정책",
+                    "section_title": "반복 처리",
+                    "content": "두 번째 재배송은 관리자 검토가 필요하다.",
+                    "rule_keys": ["repeat-reshipment"],
+                    "collection": "compensation_policy",
+                    "jurisdiction": "KR",
+                    "department": "CS",
+                },
+            ],
+        },
+    )
+
+    metadata = collect_run_metadata([message])
+
+    assert [source["citation_key"] for source in metadata.sources] == [
+        "policy-31",
+        "policy-32",
+    ]
+    assert metadata.sources[0]["excerpt"] == "무료 재배송은 1회까지 허용한다."
+
+
+def test_invalid_parent_citations_are_removed_from_answer():
+    answer = "1회까지 허용됩니다.[[cite:31]] 임의 근거입니다.[[cite:999]]"
+
+    sanitized = remove_invalid_citations(
+        answer, [{"parent_chunk_id": 31, "source_id": "reshipment-policy"}]
+    )
+
+    assert sanitized == "1회까지 허용됩니다.[[cite:31]] 임의 근거입니다."
+
+
+def test_saved_policy_source_is_hidden_after_scope_is_revoked():
+    source = {
+        "metadata": {
+            "collection": "compensation_policy",
+            "jurisdiction": "KR",
+            "department": "CS",
+        }
+    }
+
+    assert policy_source_is_allowed(
+        source["metadata"],
+        [PolicyAccessGrant("compensation_policy", "KR", "CS")],
+    )
+    assert not policy_source_is_allowed(
+        source["metadata"],
+        [PolicyAccessGrant("medical_policy", "KR", "CS")],
+    )

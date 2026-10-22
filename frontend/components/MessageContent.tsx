@@ -1,8 +1,46 @@
 import { Fragment, ReactNode } from "react";
+import { Source } from "../lib/api";
 
 
-function inline(text: string): ReactNode[] {
-  return text.split(/(\*\*.*?\*\*|`.*?`)/g).filter(Boolean).map((part, index) => {
+function showCitation(citationKey: string) {
+  const target = document.getElementById(`citation-${citationKey}`);
+
+  if (!target) return;
+  const details = target.closest("details");
+
+  if (details instanceof HTMLDetailsElement) details.open = true;
+  target.scrollIntoView({ behavior: "smooth", block: "center" });
+  target.classList.add("citation-highlight");
+  window.setTimeout(() => target.classList.remove("citation-highlight"), 1600);
+}
+
+
+function inline(text: string, sources: Source[]): ReactNode[] {
+  return text.split(/(\*\*.*?\*\*|`.*?`|\[\[cite:\d+\]\])/g).filter(Boolean).map((part, index) => {
+    const citation = part.match(/^\[\[cite:(\d+)\]\]$/);
+
+    if (citation) {
+      const sourceIndex = sources.findIndex(
+        (source) => source.parent_chunk_id === Number(citation[1]),
+      );
+
+      if (sourceIndex < 0) return null;
+      const source = sources[sourceIndex];
+
+      return (
+        <button
+          aria-label={`근거 ${sourceIndex + 1}: ${source.title} ${source.section_title || ""}`.trim()}
+          className="citation-badge"
+          key={index}
+          onClick={() => showCitation(source.citation_key)}
+          title={`${source.title} · ${source.section_title || "섹션 미상"}`}
+          type="button"
+        >
+          {sourceIndex + 1}
+        </button>
+      );
+    }
+
     if (part.startsWith("**") && part.endsWith("**")) {
       return <strong key={index}>{part.slice(2, -2)}</strong>;
     }
@@ -60,24 +98,24 @@ function tableAlignments(line: string) {
 }
 
 
-function renderLine(line: string, key: number) {
+function renderLine(line: string, key: number, sources: Source[]) {
   if (!line.trim()) return <div className="markdown-space" key={key} />;
 
-  if (line.startsWith("### ")) return <h3 key={key}>{inline(line.slice(4))}</h3>;
+  if (line.startsWith("### ")) return <h3 key={key}>{inline(line.slice(4), sources)}</h3>;
 
-  if (line.startsWith("## ")) return <h2 key={key}>{inline(line.slice(3))}</h2>;
+  if (line.startsWith("## ")) return <h2 key={key}>{inline(line.slice(3), sources)}</h2>;
   const unordered = line.match(/^\s*-\s+(.+)$/);
 
-  if (unordered) return <div className="markdown-list" key={key}><span>•</span><span>{inline(unordered[1])}</span></div>;
+  if (unordered) return <div className="markdown-list" key={key}><span>•</span><span>{inline(unordered[1], sources)}</span></div>;
   const ordered = line.match(/^\s*(\d+)\.\s+(.+)$/);
 
-  if (ordered) return <div className="markdown-list" key={key}><span>{ordered[1]}.</span><span>{inline(ordered[2])}</span></div>;
+  if (ordered) return <div className="markdown-list" key={key}><span>{ordered[1]}.</span><span>{inline(ordered[2], sources)}</span></div>;
 
-  return <p key={key}>{inline(line)}</p>;
+  return <p key={key}>{inline(line, sources)}</p>;
 }
 
 
-export function MessageContent({ content }: { content: string }) {
+export function MessageContent({ content, sources = [] }: { content: string; sources?: Source[] }) {
   const lines = content.split("\n");
   const blocks: ReactNode[] = [];
 
@@ -107,7 +145,7 @@ export function MessageContent({ content }: { content: string }) {
               <tr>
                 {headers.map((header, cellIndex) => (
                   <th className={`align-${alignments[cellIndex]}`} key={cellIndex}>
-                    {inline(header)}
+                    {inline(header, sources)}
                   </th>
                 ))}
               </tr>
@@ -117,7 +155,7 @@ export function MessageContent({ content }: { content: string }) {
                 <tr key={rowIndex}>
                   {row.map((cell, cellIndex) => (
                     <td className={`align-${alignments[cellIndex]}`} key={cellIndex}>
-                      {inline(cell)}
+                      {inline(cell, sources)}
                     </td>
                   ))}
                 </tr>
@@ -130,7 +168,7 @@ export function MessageContent({ content }: { content: string }) {
       continue;
     }
 
-    blocks.push(renderLine(lines[index], index));
+    blocks.push(renderLine(lines[index], index, sources));
     index += 1;
   }
 

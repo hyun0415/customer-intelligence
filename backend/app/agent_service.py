@@ -10,7 +10,7 @@ from src.auth.product_context import ProductContext, product_context
 from .execution import invoke_with_timeout
 from .models import AgentResponse, CurrentUser, MessageView, SourceView
 from .repository import WebRepository
-from .tool_events import collect_run_metadata
+from .tool_events import collect_run_metadata, remove_invalid_citations
 
 
 class ConversationAgentService:
@@ -41,6 +41,7 @@ class ConversationAgentService:
             self.repository.get_conversation,
             user.user_id,
             conversation_id,
+            user.policy_scopes,
         )
         if conversation is None:
             raise KeyError(conversation_id)
@@ -87,8 +88,10 @@ class ConversationAgentService:
         )
         if answer_message is None:
             raise RuntimeError("Agent가 최종 답변을 반환하지 않았습니다.")
-        answer = extract_text(answer_message.content)
         metadata = collect_run_metadata(result["messages"])
+        answer = remove_invalid_citations(
+            extract_text(answer_message.content), metadata.sources
+        )
         saved = await asyncio.to_thread(
             self.repository.add_message,
             user_id=user.user_id,

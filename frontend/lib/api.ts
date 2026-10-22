@@ -14,10 +14,14 @@ export type PolicyScope = {
 };
 
 export type Source = {
+  citation_key: string;
+  parent_chunk_id?: number;
   source_id: string;
   title: string;
   version_number?: number;
   section_title?: string;
+  rule_keys: string[];
+  excerpt?: string;
   metadata?: {
     collection?: string;
     authority_tier?: number;

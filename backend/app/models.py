@@ -58,10 +58,14 @@ class MessageCreate(BaseModel):
 
 
 class SourceView(BaseModel):
+    citation_key: str
+    parent_chunk_id: int | None = None
     source_id: str
     title: str
     version_number: int | None = None
     section_title: str | None = None
+    rule_keys: list[str] = Field(default_factory=list)
+    excerpt: str | None = None
     metadata: dict = Field(default_factory=dict)
 
 

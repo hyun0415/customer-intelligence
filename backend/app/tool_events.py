@@ -1,5 +1,6 @@
 import ast
 import json
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -54,11 +55,21 @@ def collect_run_metadata(messages: list[Any]) -> AgentRunMetadata:
         for source in payload.get("sources", []):
             source_id = source.get("source_id")
             if source_id:
-                sources_by_id[source_id] = {
+                parent_chunk_id = source.get("parent_chunk_id")
+                citation_key = (
+                    f"policy-{parent_chunk_id}"
+                    if parent_chunk_id is not None
+                    else source_id
+                )
+                sources_by_id[citation_key] = {
+                    "citation_key": citation_key,
+                    "parent_chunk_id": parent_chunk_id,
                     "source_id": source_id,
                     "title": source.get("title", source_id),
                     "version_number": source.get("version_number"),
                     "section_title": source.get("section_title"),
+                    "rule_keys": source.get("rule_keys", []),
+                    "excerpt": str(source.get("content", "")).strip()[:1200] or None,
                     "metadata": {
                         "collection": source.get("collection"),
                         "authority_tier": source.get("authority_tier"),
@@ -69,3 +80,17 @@ def collect_run_metadata(messages: list[Any]) -> AgentRunMetadata:
                     },
                 }
     return AgentRunMetadata(status, list(sources_by_id.values()), escalation)
+
+
+def remove_invalid_citations(answer: str, sources: list[dict[str, Any]]) -> str:
+    """검색 Tool이 실제 반환한 Parent 근거의 인용 표식만 보존한다."""
+    allowed_parent_ids = {
+        str(source["parent_chunk_id"])
+        for source in sources
+        if source.get("parent_chunk_id") is not None
+    }
+
+    def replace(match: re.Match[str]) -> str:
+        return match.group(0) if match.group(1) in allowed_parent_ids else ""
+
+    return re.sub(r"\[\[cite:(\d+)\]\]", replace, answer)

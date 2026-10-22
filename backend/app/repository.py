@@ -2,7 +2,7 @@ import json
 from collections.abc import Callable
 from uuid import UUID, uuid4
 
-from src.auth.access import PolicyAccessGrant
+from src.auth.access import PolicyAccessGrant, policy_source_is_allowed
 from src.database import connect
 
 from .audit import SecurityAuditEvent
@@ -299,7 +299,12 @@ class WebRepository:
                 "representative_reviews": reviews,
             }
 
-    def get_conversation(self, user_id: int, conversation_id: UUID) -> dict | None:
+    def get_conversation(
+        self,
+        user_id: int,
+        conversation_id: UUID,
+        policy_scopes: list[PolicyAccessGrant],
+    ) -> dict | None:
         with self.connection_factory() as conn:
             conversation = conn.execute(
                 """
@@ -327,14 +332,22 @@ class WebRepository:
             for message in messages:
                 message["sources"] = conn.execute(
                     """
-                    SELECT source_id, title, version_number, section_title,
+                    SELECT citation_key, parent_chunk_id, source_id, title,
+                           version_number, section_title, rule_keys, excerpt,
                            metadata
                     FROM message_sources
                     WHERE message_id = %s
-                    ORDER BY source_id
+                    ORDER BY citation_key
                     """,
                     (message["message_id"],),
                 ).fetchall()
+                message["sources"] = [
+                    source
+                    for source in message["sources"]
+                    if policy_source_is_allowed(
+                        source.get("metadata") or {}, policy_scopes
+                    )
+                ]
             return {**conversation, "messages": messages}
 
     def add_message(
@@ -375,18 +388,27 @@ class WebRepository:
                     conn.execute(
                         """
                         INSERT INTO message_sources (
-                            message_id, source_id, title, version_number,
-                            section_title, metadata
-                        ) VALUES (%s, %s, %s, %s, %s, %s::jsonb)
-                        RETURNING source_id, title, version_number, section_title,
-                                  metadata
+                            message_id, citation_key, parent_chunk_id, source_id,
+                            title, version_number, section_title, rule_keys,
+                            excerpt, metadata
+                        ) VALUES (
+                            %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s,
+                            %s::jsonb
+                        )
+                        RETURNING citation_key, parent_chunk_id, source_id, title,
+                                  version_number, section_title, rule_keys,
+                                  excerpt, metadata
                         """,
                         (
                             message_id,
+                            source["citation_key"],
+                            source.get("parent_chunk_id"),
                             source["source_id"],
                             source["title"],
                             source.get("version_number"),
                             source.get("section_title"),
+                            json.dumps(source.get("rule_keys", [])),
+                            source.get("excerpt"),
                             json.dumps(source.get("metadata", {})),
                         ),
                     ).fetchone()
